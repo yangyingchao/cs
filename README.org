@@ -20,17 +20,18 @@ helpful, so I've decided to rewrite them in Rust, making them usable outside of 
 #+begin_example
 Tool to show call stack of process(es)
 
-Usage: cs [OPTIONS]
+Usage: cs [OPTIONS] [FILES]...
+
+Arguments:
+  [FILES]...  files to read stack from, use "-" for stdin; multiple files will be merged together
 
 Options:
   -p, --pid <PIDS>               Show stack of process PID
   -c, --core <CORE>              Show stack found in COREFILE
   -e, --executable <EXECUTABLE>  (optional) EXECUTABLE that produced COREFILE
-  -u, --users <USERS>            Show processes of users(separated by ","), effective when listing and choosing processes
+  -u, --users <USERS>            Show processes of users (separated by \",\") when listing/choosing processes
   -l, --list [<LIST>]            List processes
   -i, --initial <INITIAL>        Initial value to filter process
-  -f, --file <FILE>              read call stacks from file
-  -s, --stdin                    read call stacks from file
   -W, --Wide                     Wide mode: when showing processes, show all chars in a line
   -M, --multi                    Multi mode: when choosing processes, to select multiple processes
   -U, --unique                   Unique mode: when showing call stack, show only unique ones

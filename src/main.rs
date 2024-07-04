@@ -23,35 +23,37 @@ fn main() {
         exit(0);
     };
 
-    if let Some(file) = cli.file.clone() {
-        ensure_file_exists(&file);
-        match fs::read_to_string(file) {
-            Ok(contents) => {
-                handle_content(&contents, cli.raw_mode, cli.unique_mode);
-                exit(0);
-            }
-            Err(err) => {
-                panic!("{err}");
-            }
-        }
-    };
-
-    if cli.stdin {
-        let stdin = std::io::stdin();
+    // read and parse from either files or stdin
+    if !cli.files.is_empty() {
         let mut lines = Vec::new();
-
-        for line in std::io::BufRead::lines(stdin.lock()) {
-            if let Ok(line) = line {
-                lines.push(line);
-            } else {
-                panic!("Error reading line");
+        if cli.files[0] == "-" {
+            assert!(cli.files.len() == 1); // should be the only arg.
+            let stdin = std::io::stdin();
+            for line in std::io::BufRead::lines(stdin.lock()) {
+                if let Ok(line) = line {
+                    lines.push(line);
+                } else {
+                    panic!("Error reading line");
+                }
+            }
+        } else {
+            for file in cli.files {
+                ensure_file_exists(&file);
+                match fs::read_to_string(file) {
+                    Ok(contents) => {
+                        lines.push(contents);
+                    }
+                    Err(err) => {
+                        panic!("{err}");
+                    }
+                }
             }
         }
 
         let contents = lines.join("\n");
         handle_content(&contents, cli.raw_mode, cli.unique_mode);
         exit(0);
-    };
+    }
 
     if cli.pids.is_none() && cli.core.is_none() {
         match choose_process(

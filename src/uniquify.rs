@@ -76,12 +76,8 @@ pub fn uniquify_eustack(input: &str) -> Result<(), String> {
     let mut stack = "".to_owned();
 
     for s in input.split('\n') {
-        if let Some(m) = r_match_pid.captures(s) {
-            assert!(tid.is_empty() && stack.is_empty());
-            println!(
-                "Showing unique stack of process {}",
-                m.name("pid").unwrap().as_str()
-            );
+        if r_match_pid.captures(s).is_some() {
+            continue;
         } else if r_match_empty.find(s).is_some() {
         } else if let Some(m) = r_match_tid.captures(s) {
             // start of new stack

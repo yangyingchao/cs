@@ -1,103 +1,57 @@
-use clap::Parser;
+use std::process::exit;
 
-const ST_VERSION: &str = env!("CARGO_PKG_VERSION");
+use clap::Parser;
 
 #[derive(Parser)]
 #[command(long_about = None, about = "Tool to show call stack of process(es)",
-    arg_required_else_help = true, version=ST_VERSION )]
+          arg_required_else_help = true, version, trailing_var_arg=true)]
 pub struct Cli {
     #[arg(short = 'p', long = "pid", help = "Show stack of process PID")]
     pub pids: Option<Vec<String>>,
 
-    #[arg(
-        short = 'c',
-        long = "core",
-        help = "Show stack found in COREFILE",
-        conflicts_with = "pids"
-    )]
+    /// Show stack found in COREFILE
+    #[arg(short = 'c', long = "core", conflicts_with = "pids")]
     pub core: Option<String>,
 
-    #[arg(
-        short = 'e',
-        long = "executable",
-        help = "(optional) EXECUTABLE that produced COREFILE",
-        conflicts_with = "pids"
-    )]
+    /// (optional) EXECUTABLE that produced COREFILE
+    #[arg(short = 'e', long = "executable", conflicts_with = "pids")]
     pub executable: Option<String>,
 
-    #[arg(
-        short = 'u',
-        long = "users",
-        help = "Show processes of users(separated by \",\"), effective when listing and choosing processes"
-    )]
+    /// Show processes of users (separated by \",\") when listing/choosing processes
+    #[arg(short = 'u', long = "users")]
     pub users: Option<String>,
 
-    #[arg(short='l', long = "list", help = "List processes", num_args=0..2,)]
+    /// List processes
+    #[arg(short='l', long = "list", num_args=0..2,)]
     pub list: Option<Vec<String>>,
 
-    #[arg(
-        short = 'i',
-        long = "initial",
-        help = "Initial value to filter process"
-    )]
+    /// Initial value to filter process
+    #[arg(short = 'i', long = "initial")]
     pub initial: Option<String>,
 
-    #[arg(
-        short = 'f',
-        long = "file",
-        help = "read call stacks from file",
-        conflicts_with = "gdb_mode"
-    )]
-    pub file: Option<String>,
-
-    #[arg(
-        short,
-        long = "stdin",
-        help = "read call stacks from file",
-        conflicts_with = "pids",
-        conflicts_with = "core"
-    )]
-    pub stdin: bool,
-
-    #[arg(
-        short = 'W',
-        long = "Wide",
-        help = "Wide mode: when showing processes, show all chars in a line",
-        default_value_t = false
-    )]
+    /// Wide mode: when showing processes, show all chars in a line
+    #[arg(short = 'W', long = "Wide", default_value_t = false)]
     pub wide_mode: bool,
 
-    #[arg(
-        short = 'M',
-        long = "multi",
-        help = "Multi mode: when choosing processes, to select multiple processes",
-        default_value_t = false
-    )]
+    /// Multi mode: when choosing processes, to select multiple processes
+    #[arg(short = 'M', long = "multi", default_value_t = false)]
     pub multi_mode: bool,
 
-    #[arg(
-        short = 'U',
-        long = "unique",
-        help = "Unique mode: when showing call stack, show only unique ones",
-        default_value_t = false
-    )]
+    /// Unique mode: when showing call stack, show only unique ones
+    #[arg(short = 'U', long = "unique", default_value_t = false)]
     pub unique_mode: bool,
 
-    #[arg(
-        short = 'G',
-        long = "gdb",
-        help = "gdb mode: use gdb to get call stack (default to eu-stack)",
-        default_value_t = false
-    )]
+    /// gdb mode: use gdb to get call stack (default to eu-stack)
+    #[arg(short = 'G', long = "gdb", default_value_t = false)]
     pub gdb_mode: bool,
 
-    #[arg(
-        short = 'R',
-        long = "raw",
-        help = "Row mode: do not try to simpilfy callstacks (works only in GDB mode)",
-        default_value_t = false
-    )]
+    ///Row mode: do not try to simpilfy callstacks (works only in GDB mode)
+    #[arg(short = 'R', long = "raw", default_value_t = false)]
     pub raw_mode: bool,
+
+    /// files to read stack from, use "-" for stdin; multiple files will be merged together.
+    #[clap(allow_hyphen_values=true, num_args=0..,)]
+    pub files: Vec<String>,
 }
 
 impl Cli {
@@ -109,13 +63,12 @@ impl Cli {
             users: None,
             list: None,
             initial: None,
-            file: None,
-            stdin: false,
             wide_mode: false,
             multi_mode: false,
             unique_mode: false,
             gdb_mode: false,
             raw_mode: true,
+            files: vec![],
         }
     }
 }
@@ -129,7 +82,12 @@ where
     if args.len() == 1 {
         Cli::default()
     } else {
-        Cli::parse_from(args)
+        let cli = Cli::parse_from(args);
+        if cli.files.len() > 1 && cli.files.contains(&"-".to_owned()) {
+            eprintln!("stdin should not be used together with other files");
+            exit(2);
+        }
+        cli
     }
 }
 
@@ -141,6 +99,7 @@ fn test_parse_args() {
     assert!(cli.initial.is_none());
     assert!(cli.users.is_none());
     assert!(cli.gdb_mode == false);
+    assert!(cli.files.is_empty());
 
     let cli = parse_args(vec!["st", "-U", "-c", "corefile"]);
     assert!(cli.unique_mode);
@@ -174,9 +133,6 @@ fn test_parse_args() {
     // conflict options
     for args in vec![
         vec!["st", "-c", "corefile", "-p", "1000"],
-        vec!["st", "--stdin", "-p", "1000"],
-        vec!["st", "--stdin", "-c", "core"],
-        vec!["st", "-G", "-f", "somefile"],
     ] {
         match Cli::try_parse_from(args) {
             Ok(_) => {
@@ -187,4 +143,13 @@ fn test_parse_args() {
             }
         }
     }
+
+    // trailing args should be files
+    let cli = parse_args(vec!["st", "file-1", "file-2"]);
+    assert!(cli.files.len() == 2);
+    println!("{:?}", cli.files);
+
+    let cli = parse_args(vec!["st", "-"]);
+    assert!(cli.files.len() == 1);
+    println!("{:?}", cli.files);
 }
