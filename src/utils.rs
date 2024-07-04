@@ -65,6 +65,9 @@ pub fn choose_process(
     let mut page_size: usize = 20;
     let mut columns: usize = 80;
     if let Ok((width, height)) = terminal_size() {
+        if width == 0 || height == 0 {
+            return Err("failed to get terminal size".to_string());
+        }
         page_size = std::cmp::max(7, height - 2) as usize;
         columns = (width - if multi { 8 } else { 4 }) as usize;
     };
@@ -220,4 +223,7 @@ fn test_parse_and_get_pid() {
         parse_and_get_pid(" 320282 root     15:29 [kworker/0:2-i915-unordered]"),
         "320282"
     );
+
+    let s = terminal_size();
+    println!("S: {:?}", s);
 }

@@ -64,7 +64,7 @@ fn main() {
                 cli.pids.replace(pids);
             }
             Err(err) => {
-                panic!("{err}");
+                panic!("Abort: {err}");
             }
         }
     }
