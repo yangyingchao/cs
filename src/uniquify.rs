@@ -15,11 +15,18 @@ fn sort_and_print_stack(cache: HashMap<String, String>) -> Result<(), String> {
         ordered_cache.insert(count, v);
     }
 
-    let r_match_suspicious = Regex::new(
-        r#"(?P<sus>(segfault|segmentfault|segment fault|signal handler called|raise|__assert_fail).*)"#,
-    )
-    .unwrap();
+    let keywords = [
+        "__assert_fail",
+        "fatal.*signals",
+        "raise",
+        "segfault",
+        "segment fault",
+        "segmentfault",
+        "signal handler called",
+    ];
 
+    let pattern = format!(r#"(?i)(?P<sus>.*({}).*)"#, keywords.join("|"));
+    let r_match_suspicious = Regex::new(&pattern).unwrap();
     let mut suspicious: Vec<String> = vec![];
 
     println!();
@@ -32,7 +39,7 @@ fn sort_and_print_stack(cache: HashMap<String, String>) -> Result<(), String> {
                     .replace_all(stack, |captures: &regex::Captures| {
                         let matched_text = captures.name("sus").unwrap().as_str();
                         format!(
-                            " {}{}",
+                            "{}{}",
                             matched_text.blue(),
                             "                           <---- HERE ".red().bold()
                         )
