@@ -214,7 +214,7 @@ fn test_list_process() {
     assert!(result.is_ok_and(|x| !x.is_empty()));
 
     list_process(false, None, None);
-    list_process(false, Some("boost".to_owned()), None);
+    list_process(false, Some("cs".to_owned()), None);
 }
 
 #[test]

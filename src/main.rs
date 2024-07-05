@@ -18,7 +18,10 @@ mod uniquify;
 fn main() {
     let mut cli = parse_args(std::env::args());
 
-    if let Some(pattern) = &cli.list {
+    if let Some(mut pattern) = cli.list {
+        if pattern.is_empty() && cli.initial.is_some() {
+            pattern.push(cli.initial.unwrap());
+        }
         list_process(cli.wide_mode, pattern.first().cloned(), cli.users);
         exit(0);
     };
@@ -26,8 +29,7 @@ fn main() {
     // read and parse from either files or stdin
     if !cli.files.is_empty() {
         let mut lines = Vec::new();
-        if cli.files[0] == "-" {
-            assert!(cli.files.len() == 1); // should be the only arg.
+        if cli.files.len() == 1 && cli.files[0] == "-" {
             let stdin = std::io::stdin();
             for line in std::io::BufRead::lines(stdin.lock()) {
                 if let Ok(line) = line {

@@ -131,9 +131,7 @@ fn test_parse_args() {
     assert!(cli.initial.unwrap() == "pattern1");
 
     // conflict options
-    for args in vec![
-        vec!["st", "-c", "corefile", "-p", "1000"],
-    ] {
+    for args in vec![vec!["st", "-c", "corefile", "-p", "1000"]] {
         match Cli::try_parse_from(args) {
             Ok(_) => {
                 panic!();
