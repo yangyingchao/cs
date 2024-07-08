@@ -6,7 +6,7 @@ use std::process::exit;
 
 use gdb::run_gdb;
 use uniquify::handle_content;
-use utils::{choose_process, ensure_file_exists, list_process};
+use utils::{choose_process, ensure_file_exists, execute_command, list_process};
 
 use crate::args::parse_args;
 
@@ -14,6 +14,7 @@ mod eu_stack;
 use crate::eu_stack::run_eustack;
 mod gdb;
 mod uniquify;
+use pager::Pager;
 
 fn main() {
     let mut cli = parse_args(std::env::args());
@@ -72,7 +73,23 @@ fn main() {
             }
         }
     }
+
+    if !cli.gdb_mode {
+        if let Ok((code, _out, _err)) = execute_command("which", ["eu-stack"]) {
+            if code != 0 {
+                eprintln!("Failed to find eu-stack, will try gdb instead...");
+                cli.gdb_mode = true;
+            }
+        };
+    }
+
+    Pager::new().setup();
     match if cli.gdb_mode {
+        if let Ok((code, _out, _err)) = execute_command("which", ["gdb"]) {
+            if code != 0 {
+                panic!("Failed to find gdb");
+            }
+        };
         run_gdb(&cli)
     } else {
         run_eustack(&cli)

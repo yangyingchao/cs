@@ -50,7 +50,7 @@ fn get_process_list(users: Option<String>) -> Result<Vec<String>, String> {
             if code != 0 {
                 return Err(err);
             }
-            return Ok(out.split('\n').map(|s| s.to_string()).collect());
+            return Ok(out.split('\n').skip(1).map(|s| s.to_string()).collect());
         }
         Err(err) => Err(err.to_string()),
     }
