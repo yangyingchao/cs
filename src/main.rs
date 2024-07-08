@@ -66,6 +66,10 @@ fn main() {
             cli.multi_mode,
         ) {
             Ok(pids) => {
+                if pids.is_empty() {
+                    eprintln!("\nNo process is selected.");
+                    exit(1);
+                }
                 cli.pids.replace(pids);
             }
             Err(err) => {
