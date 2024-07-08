@@ -45,7 +45,7 @@ pub struct Cli {
     #[arg(short = 'G', long = "gdb", default_value_t = false)]
     pub gdb_mode: bool,
 
-    ///Row mode: do not try to simpilfy callstacks (works only in GDB mode)
+    ///Raw mode: do not try to simplify callstacks (works only in GDB mode)
     #[arg(short = 'R', long = "raw", default_value_t = false)]
     pub raw_mode: bool,
 

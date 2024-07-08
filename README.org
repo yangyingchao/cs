@@ -36,7 +36,7 @@ Options:
   -M, --multi                    Multi mode: when choosing processes, to select multiple processes
   -U, --unique                   Unique mode: when showing call stack, show only unique ones
   -G, --gdb                      gdb mode: use gdb to get call stack (default to eu-stack)
-  -R, --raw                      Row mode: do not try to simpilfy callstacks (works only in GDB mode)
+  -R, --raw                      Raw mode: do not try to simplify callstacks (works only in GDB mode)
   -h, --help                     Print help
   -V, --version                  Print version
 #+end_example
