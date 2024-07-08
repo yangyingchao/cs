@@ -18,6 +18,8 @@ use pager::Pager;
 
 fn main() {
     let mut cli = parse_args(std::env::args());
+    let _ = utils::get_terminal_size(); // must be done before setup pager
+    Pager::new().setup();
 
     if let Some(mut pattern) = cli.list {
         if pattern.is_empty() && cli.initial.is_some() {
@@ -87,7 +89,6 @@ fn main() {
         };
     }
 
-    Pager::new().setup();
     match if cli.gdb_mode {
         if let Ok((code, _out, _err)) = execute_command("which", ["gdb"]) {
             if code != 0 {

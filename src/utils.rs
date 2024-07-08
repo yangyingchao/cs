@@ -2,6 +2,7 @@ use inquire::{MultiSelect, Select};
 use std::{
     ffi::OsStr,
     process::{Command, Stdio},
+    sync::OnceLock,
 };
 use termion::terminal_size;
 
@@ -56,21 +57,32 @@ fn get_process_list(users: Option<String>) -> Result<Vec<String>, String> {
     }
 }
 
+/// save_terminal_size  -  save terminal size.
+// some function (like pager) may change behaviour of ioctl...
+pub fn get_terminal_size() -> &'static (usize, usize) {
+    static TERM_SIZE: OnceLock<(usize, usize)> = OnceLock::new();
+    TERM_SIZE.get_or_init(|| {
+        if let Ok((width, height)) = terminal_size() {
+            if width != 0 {
+                (width as usize, height as usize)
+            } else {
+                (80, 24)
+            }
+        } else {
+            (80, 24)
+        }
+    })
+}
+
 pub fn choose_process(
     users: Option<String>,
     pattern: Option<String>,
     wide: bool,
     multi: bool,
 ) -> Result<Vec<String>, String> {
-    let mut page_size: usize = 20;
-    let mut columns: usize = 80;
-    if let Ok((width, height)) = terminal_size() {
-        if width == 0 || height == 0 {
-            return Err("failed to get terminal size".to_string());
-        }
-        page_size = std::cmp::max(7, height - 2) as usize;
-        columns = (width - if multi { 8 } else { 4 }) as usize;
-    };
+    let (width, height) = get_terminal_size();
+    let page_size: usize = std::cmp::max(7, height - 2) as usize;
+    let columns = width - if multi { 8 } else { 4 };
 
     match get_process_list(users) {
         Ok(cands) => {
@@ -118,11 +130,8 @@ pub fn choose_process(
 }
 
 pub fn list_process(wide: bool, pattern: Option<String>, users: Option<String>) {
-    let mut columns: usize = 80;
-    if let Ok((width, _height)) = terminal_size() {
-        columns = (width - 2) as usize;
-    };
-
+    let (width, _) = get_terminal_size();
+    let columns: usize = width - 2;
     match get_process_list(users) {
         Ok(cands) => {
             let cands: Vec<String> = if wide {
