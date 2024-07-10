@@ -44,20 +44,19 @@ pub fn run_gdb(cli: &Cli) -> Result<(), String> {
     }
 
     if let Some(pids) = &cli.pids {
-        let mut has_error = false;
+        let mut err: Option<String> = None;
         for pid in pids {
             let args = vec!["--batch", "-p", pid, "-ex", "thread apply all backtrace"];
             println!("Run for process: {:?}", pid);
             match do_run_gdb(args, cli.unique_mode, cli.raw_mode) {
                 Ok(_) => {}
-                Err(err) => {
-                    has_error = true;
-                    eprintln!("{err}")
+                Err(e) => {
+                    err.replace(e);
                 }
             }
         }
-        if has_error {
-            return Err("error detected".to_owned());
+        if let Some(err) = err {
+            return Err(err);
         } else {
             return Ok(());
         }
