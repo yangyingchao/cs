@@ -1,12 +1,9 @@
 use inquire::{MultiSelect, Select};
-use std::{
-    ffi::OsStr,
-    process::{Command, Stdio},
-    sync::OnceLock,
-};
+use std::{ffi::OsStr, process::Stdio, sync::OnceLock};
 use termion::terminal_size;
+use tokio::process::Command;
 
-pub fn execute_command<S, I>(
+pub async fn execute_command<S, I>(
     command: &str,
     args: I,
 ) -> Result<(i32, String, String), std::io::Error>
@@ -14,13 +11,13 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    let child_process = Command::new(command)
+    let child = Command::new(command)
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
 
-    let output = child_process.wait_with_output()?;
+    let output = child.wait_with_output().await.unwrap();
     let exit_code = output.status.code().unwrap_or(-1);
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -34,7 +31,7 @@ fn parse_and_get_pid(s: &str) -> String {
     m.name("pid").unwrap().as_str().to_string()
 }
 
-fn get_process_list(users: Option<String>) -> Result<Vec<String>, String> {
+async fn get_process_list(users: Option<String>) -> Result<Vec<String>, String> {
     let mut args: Vec<String> = vec!["-o", "pid,user,stime,cmd"]
         .into_iter()
         .map(|s| s.to_owned())
@@ -46,7 +43,7 @@ fn get_process_list(users: Option<String>) -> Result<Vec<String>, String> {
         args.push("-A".to_owned());
     };
 
-    match execute_command("ps", &args) {
+    match execute_command("ps", &args).await {
         Ok((code, out, err)) => {
             if code != 0 {
                 return Err(err);
@@ -74,7 +71,7 @@ pub fn get_terminal_size() -> &'static (usize, usize) {
     })
 }
 
-pub fn choose_process(
+pub async fn choose_process(
     users: Option<String>,
     pattern: Option<String>,
     wide: bool,
@@ -84,7 +81,7 @@ pub fn choose_process(
     let page_size: usize = std::cmp::max(7, height - 2) as usize;
     let columns = width - if multi { 8 } else { 4 };
 
-    match get_process_list(users) {
+    match get_process_list(users).await {
         Ok(cands) => {
             let initial = pattern.unwrap_or("".to_owned());
             let cands: Vec<String> = if wide {
@@ -129,10 +126,10 @@ pub fn choose_process(
     }
 }
 
-pub fn list_process(wide: bool, pattern: Option<String>, users: Option<String>) {
+pub async fn list_process(wide: bool, pattern: Option<String>, users: Option<String>) {
     let (width, _) = get_terminal_size();
     let columns: usize = width - 2;
-    match get_process_list(users) {
+    match get_process_list(users).await {
         Ok(cands) => {
             let cands: Vec<String> = if wide {
                 cands
@@ -186,10 +183,9 @@ pub fn ensure_file_exists(file: &str) {
     }
 }
 
-#[test]
-fn test_command_execution() {
-    // normal command, should not error.
-    if let Ok(result) = execute_command("ls", &["-a", "-l"]) {
+#[tokio::test]
+async fn test_command_execution() {
+    if let Ok(result) = execute_command("ls", &["-a", "-l"]).await {
         let (code, out, err) = result;
         assert_eq!(code, 0);
         assert!(!out.is_empty());
@@ -198,7 +194,7 @@ fn test_command_execution() {
         panic!();
     };
 
-    if let Ok(result) = execute_command("ls", &["-a", "-l", "/target_dir_does_not_exist"]) {
+    if let Ok(result) = execute_command("ls", &["-a", "-l", "/target_dir_does_not_exist"]).await {
         let (code, out, err) = result;
         assert_ne!(code, 0);
         assert!(out.is_empty());
@@ -207,27 +203,27 @@ fn test_command_execution() {
         panic!();
     };
 
-    if let Err(err) = execute_command("command_not_exist", &["-a", "-l"]) {
+    if let Err(err) = execute_command("command_not_exist", &["-a", "-l"]).await {
         eprintln!("{}", err);
     } else {
         panic!();
     };
 }
 
-#[test]
-fn test_list_process() {
-    let result = get_process_list(Some("some_one_does_not_exists".to_owned()));
+#[tokio::test]
+async fn test_list_process() {
+    let result = get_process_list(Some("some_one_does_not_exists".to_owned())).await;
     assert!(result.is_err());
 
-    let result = get_process_list(Some("root".to_owned()));
+    let result = get_process_list(Some("root".to_owned())).await;
     assert!(result.is_ok_and(|x| !x.is_empty()));
 
-    list_process(false, None, None);
-    list_process(false, Some("cs".to_owned()), None);
+    list_process(false, None, None).await;
+    list_process(false, Some("cs".to_owned()), None).await;
 }
 
-#[test]
-fn test_parse_and_get_pid() {
+#[tokio::test]
+async fn test_parse_and_get_pid() {
     assert_eq!(
         parse_and_get_pid(" 320282 root     15:29 [kworker/0:2-i915-unordered]"),
         "320282"

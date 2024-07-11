@@ -14,18 +14,17 @@ mod eu_stack;
 use crate::eu_stack::run_eustack;
 mod gdb;
 mod uniquify;
-use pager::Pager;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut cli = parse_args(std::env::args());
     let _ = utils::get_terminal_size(); // must be done before setup pager
-    Pager::new().setup();
 
     if let Some(mut pattern) = cli.list {
         if pattern.is_empty() && cli.initial.is_some() {
             pattern.push(cli.initial.unwrap());
         }
-        list_process(cli.wide_mode, pattern.first().cloned(), cli.users);
+        list_process(cli.wide_mode, pattern.first().cloned(), cli.users).await;
         exit(0);
     };
 
@@ -66,7 +65,9 @@ fn main() {
             cli.initial.clone(),
             cli.wide_mode,
             cli.multi_mode,
-        ) {
+        )
+        .await
+        {
             Ok(pids) => {
                 if pids.is_empty() {
                     eprintln!("\nNo process is selected.");
@@ -81,7 +82,7 @@ fn main() {
     }
 
     if !cli.gdb_mode {
-        if let Ok((code, _out, _err)) = execute_command("which", ["eu-stack"]) {
+        if let Ok((code, _out, _err)) = execute_command("which", ["eu-stack"]).await {
             if code != 0 {
                 eprintln!("Failed to find eu-stack, will try gdb instead...");
                 cli.gdb_mode = true;
@@ -90,14 +91,14 @@ fn main() {
     }
 
     match if cli.gdb_mode {
-        if let Ok((code, _out, _err)) = execute_command("which", ["gdb"]) {
+        if let Ok((code, _out, _err)) = execute_command("which", ["gdb"]).await {
             if code != 0 {
                 panic!("Failed to find gdb");
             }
         };
-        run_gdb(&cli)
+        run_gdb(&cli).await
     } else {
-        run_eustack(&cli)
+        run_eustack(&cli).await
     } {
         Ok(_) => {}
         Err(err) => {

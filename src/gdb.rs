@@ -1,11 +1,14 @@
+use futures::future::join_all;
+use std::sync::{Arc, Mutex};
+
 use crate::{
     args::Cli,
     uniquify::{simplify_stack, uniquify_gdb},
     utils::execute_command,
 };
 
-fn do_run_gdb(args: Vec<&str>, unique: bool, raw: bool) -> Result<(), String> {
-    match execute_command("gdb", args) {
+async fn do_run_gdb(args: Vec<&str>, unique: bool, raw: bool) -> Result<(), String> {
+    match execute_command("gdb", args).await {
         Ok(result) => {
             let (code, out, err) = result;
             if code <= 1 {
@@ -27,7 +30,7 @@ fn do_run_gdb(args: Vec<&str>, unique: bool, raw: bool) -> Result<(), String> {
     }
 }
 
-pub fn run_gdb(cli: &Cli) -> Result<(), String> {
+pub async fn run_gdb(cli: &Cli) -> Result<(), String> {
     if let Some(_corefile) = &cli.core {
         // let mut args = vec![];
         // args.push("--core".into());
@@ -44,19 +47,40 @@ pub fn run_gdb(cli: &Cli) -> Result<(), String> {
     }
 
     if let Some(pids) = &cli.pids {
-        let mut err: Option<String> = None;
-        for pid in pids {
-            let args = vec!["--batch", "-p", pid, "-ex", "thread apply all backtrace"];
-            println!("Run for process: {:?}", pid);
-            match do_run_gdb(args, cli.unique_mode, cli.raw_mode) {
-                Ok(_) => {}
-                Err(e) => {
-                    err.replace(e);
+        // let mut err: Option<String> = None;
+
+        let mut handles = vec![];
+        let errors: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
+
+        let unique = cli.unique_mode;
+        let raw = cli.raw_mode;
+        for pid in pids.clone() {
+            let error_ref = errors.clone();
+            handles.push(tokio::spawn(async move {
+                let args = vec![
+                    "--batch",
+                    "-p",
+                    pid.as_str(),
+                    "-ex",
+                    "thread apply all backtrace",
+                ];
+                println!("Run for process: {:?}", pid);
+                match do_run_gdb(args, unique, raw).await {
+                    Ok(_) => {}
+                    Err(err) => {
+                        eprintln!("Process {pid} returns error: {err}");
+                        error_ref.lock().unwrap().push(pid);
+                    }
                 }
-            }
+            }));
         }
-        if let Some(err) = err {
-            return Err(err);
+
+        join_all(handles).await;
+        if !errors.lock().unwrap().is_empty() {
+            return Err(format!(
+                "error detected on process: {}",
+                errors.lock().unwrap().join(",")
+            ));
         } else {
             return Ok(());
         }

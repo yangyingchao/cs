@@ -1,11 +1,15 @@
+use std::sync::{Arc, Mutex};
+
+use futures::future::join_all;
+
 use crate::{
     args::Cli,
     uniquify::uniquify_eustack,
     utils::{ensure_file_exists, execute_command},
 };
 
-fn do_run_eustack(args: Vec<String>, unique: bool) -> Result<(), String> {
-    match execute_command("eu-stack", args) {
+async fn do_run_eustack(args: Vec<String>, unique: bool) -> Result<(), String> {
+    match execute_command("eu-stack", args).await {
         Ok(result) => {
             let (code, out, err) = result;
             if code <= 1 {
@@ -26,7 +30,7 @@ fn do_run_eustack(args: Vec<String>, unique: bool) -> Result<(), String> {
     }
 }
 
-pub fn run_eustack(cli: &Cli) -> Result<(), String> {
+pub async fn run_eustack(cli: &Cli) -> Result<(), String> {
     if let Some(corefile) = &cli.core {
         let mut args = vec![];
         args.push("--core".into());
@@ -38,24 +42,34 @@ pub fn run_eustack(cli: &Cli) -> Result<(), String> {
             args.push(executable.to_owned());
         };
 
-        return do_run_eustack(args, cli.unique_mode);
+        return do_run_eustack(args, cli.unique_mode).await;
     }
 
     if let Some(pids) = &cli.pids {
-        let mut has_error = false;
-        for pid in pids {
-            let args = vec!["-p".to_string(), pid.to_string()];
-            println!("Run for process: {:?}", pid);
-            match do_run_eustack(args, cli.unique_mode) {
-                Ok(_) => {}
-                Err(err) => {
-                    has_error = true;
-                    eprintln!("{err}")
+        let mut handles = vec![];
+        let errors: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
+
+        let unique = cli.unique_mode;
+        for pid in pids.clone() {
+            let error_ref = errors.clone();
+            handles.push(tokio::spawn(async move {
+                let args = vec!["-p".to_string(), pid.to_string()];
+                match do_run_eustack(args, unique).await {
+                    Ok(_) => {}
+                    Err(err) => {
+                        eprintln!("Process {pid} returns error: {err}");
+                        error_ref.lock().unwrap().push(pid);
+                    }
                 }
-            }
+            }));
         }
-        if has_error {
-            return Err("error detected".to_owned());
+
+        join_all(handles).await;
+        if !errors.lock().unwrap().is_empty() {
+            return Err(format!(
+                "error detected on process: {}",
+                errors.lock().unwrap().join(",")
+            ));
         } else {
             return Ok(());
         }
