@@ -63,6 +63,7 @@ async fn main() {
         match choose_process(
             cli.users.clone(),
             cli.initial.clone(),
+            cli.pattern.clone(),
             cli.wide_mode,
             cli.multi_mode,
         )

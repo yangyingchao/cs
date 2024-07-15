@@ -32,6 +32,7 @@ Options:
   -u, --users <USERS>            Show processes of users (separated by \",\") when listing/choosing processes
   -l, --list [<LIST>]            List processes
   -i, --initial <INITIAL>        Initial value to filter process
+  -P, --pattern <PATTERN>        Show call stacks of processes whose name matches PATTERN
   -W, --Wide                     Wide mode: when showing processes, show all chars in a line
   -M, --multi                    Multi mode: when choosing processes, to select multiple processes
   -U, --unique                   Unique mode: when showing call stack, show only unique ones
@@ -40,3 +41,18 @@ Options:
   -h, --help                     Print help
   -V, --version                  Print version
 #+end_example
+
+
+Usage examples:
+
+- =cs= \\
+  Choose process interactive and show's its call stack
+
+- =cs -l -u user= \\
+  Show processes of USER.
+
+- =cs -p 90588 -U= \\
+  Show uniue stack for process =90588=
+
+- =cs -U -P google.chrome= \\
+  Show unique stack of all processes of google chrome

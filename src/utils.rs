@@ -73,6 +73,7 @@ pub fn get_terminal_size() -> &'static (usize, usize) {
 
 pub async fn choose_process(
     users: Option<String>,
+    initial: Option<String>,
     pattern: Option<String>,
     wide: bool,
     multi: bool,
@@ -83,7 +84,7 @@ pub async fn choose_process(
 
     match get_process_list(users).await {
         Ok(cands) => {
-            let initial = pattern.unwrap_or("".to_owned());
+            let initial = initial.unwrap_or("".to_owned());
             let cands: Vec<String> = if wide {
                 cands
             } else {
@@ -93,7 +94,21 @@ pub async fn choose_process(
                     .collect()
             };
 
-            if multi {
+            if let Some(pattern) = pattern {
+                let r_match_pattern = regex::Regex::new(&pattern).unwrap();
+                let r_match_self = regex::Regex::new(&format!(" {} ", std::process::id())).unwrap();
+                let cands: Vec<String> = cands
+                    .into_iter()
+                    .filter(|s| r_match_pattern.find(s).is_some() && r_match_self.find(s).is_none())
+                    .collect();
+
+                if cands.is_empty() {
+                    println!("No process matches givn patter: {pattern}");
+                    std::process::exit(1);
+                }
+
+                Ok(cands.into_iter().map(|s| parse_and_get_pid(&s)).collect())
+            } else if multi {
                 match MultiSelect::new("Choose process: ", cands)
                     .with_starting_filter_input(&initial)
                     .with_page_size(page_size)

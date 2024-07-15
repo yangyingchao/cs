@@ -29,6 +29,10 @@ pub struct Cli {
     #[arg(short = 'i', long = "initial")]
     pub initial: Option<String>,
 
+    /// Show call stacks of processes whose name matches PATTERN.
+    #[arg(short = 'P', long = "pattern", conflicts_with_all = ["initial", "list"])]
+    pub pattern: Option<String>,
+
     /// Wide mode: when showing processes, show all chars in a line
     #[arg(short = 'W', long = "Wide", default_value_t = false)]
     pub wide_mode: bool,
@@ -69,6 +73,7 @@ impl Cli {
             gdb_mode: false,
             raw_mode: true,
             files: vec![],
+            pattern: None,
         }
     }
 }
@@ -131,7 +136,11 @@ fn test_parse_args() {
     assert!(cli.initial.unwrap() == "pattern1");
 
     // conflict options
-    for args in vec![vec!["st", "-c", "corefile", "-p", "1000"]] {
+    for args in vec![
+        vec!["st", "-c", "corefile", "-p", "1000"],
+        vec!["st", "-i", "i", "-P", "pattern"],
+        vec!["st", "-l", "i", "-P", "pattern"],
+    ] {
         match Cli::try_parse_from(args) {
             Ok(_) => {
                 panic!();
