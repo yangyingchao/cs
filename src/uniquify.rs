@@ -33,7 +33,7 @@ fn sort_and_print_stack(cache: HashMap<String, String>) -> Result<(), String> {
     let pairs: Vec<_> = ordered_cache.iter().collect();
     for (key, val) in pairs.iter().rev() {
         for (pids, stack) in *val {
-            if r_match_suspicious.find(stack).is_some() {
+            if r_match_suspicious.is_match(stack) {
                 suspicious.push((*pids).clone());
                 let stack = r_match_suspicious
                     .replace_all(stack, |captures: &regex::Captures| {
@@ -85,7 +85,7 @@ pub fn uniquify_eustack(input: &str) -> Result<(), String> {
     for s in input.split('\n') {
         if r_match_pid.captures(s).is_some() {
             continue;
-        } else if r_match_empty.find(s).is_some() {
+        } else if r_match_empty.is_match(s) {
         } else if let Some(m) = r_match_tid.captures(s) {
             // start of new stack
             if !tid.is_empty() {
@@ -98,7 +98,7 @@ pub fn uniquify_eustack(input: &str) -> Result<(), String> {
 
             tid = m.name("tid").unwrap().as_str();
             stack = "".to_string();
-        } else if r_match_entry.find(s).is_some() {
+        } else if r_match_entry.is_match(s) {
             stack = stack + s + "\n";
         }
     }
@@ -145,9 +145,9 @@ pub fn uniquify_gdb(input: &str) -> Result<(), String> {
 
             tid = m.name("lwp").unwrap().as_str();
             stack = "".to_string();
-        } else if r_match_entry.find(s).is_some() {
+        } else if r_match_entry.is_match(s) {
             stack = stack + s + "\n";
-        } else if r_match_detach.find(s).is_some() || !match_started {
+        } else if r_match_detach.is_match(s) || !match_started {
             continue;
         } else {
             eprintln!("IGNORE: Failed to parse: {s}");

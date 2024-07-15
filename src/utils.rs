@@ -25,7 +25,7 @@ where
     Ok((exit_code, stdout, stderr))
 }
 
-fn parse_and_get_pid(s: &str) -> String {
+fn parse_pid(s: &str) -> String {
     let r_match_pid = regex::Regex::new(r#"\s*(?P<pid>\d+)\s+"#).unwrap();
     let m = r_match_pid.captures(s).expect("capture fails");
     m.name("pid").unwrap().as_str().to_string()
@@ -99,24 +99,24 @@ pub async fn choose_process(
                 let r_match_self = regex::Regex::new(&format!(" {} ", std::process::id())).unwrap();
                 let cands: Vec<String> = cands
                     .into_iter()
-                    .filter(|s| r_match_pattern.find(s).is_some() && r_match_self.find(s).is_none())
+                    .filter(|s| r_match_pattern.is_match(s) && !r_match_self.is_match(s))
                     .collect();
 
                 if cands.is_empty() {
-                    println!("No process matches givn patter: {pattern}");
+                    eprintln!("No process matches givn patter: {pattern}");
                     std::process::exit(1);
                 }
 
-                Ok(cands.into_iter().map(|s| parse_and_get_pid(&s)).collect())
+                Ok(cands.into_iter().map(|s| parse_pid(&s)).collect())
             } else if multi {
                 match MultiSelect::new("Choose process: ", cands)
                     .with_starting_filter_input(&initial)
                     .with_page_size(page_size)
                     .prompt()
                 {
-                    Ok(choice) => Ok(choice.into_iter().map(|s| parse_and_get_pid(&s)).collect()),
+                    Ok(choice) => Ok(choice.into_iter().map(|s| parse_pid(&s)).collect()),
                     Err(e) => {
-                        println!("{e}");
+                        eprintln!("{e}");
                         std::process::exit(1);
                     }
                 }
@@ -126,9 +126,9 @@ pub async fn choose_process(
                     .with_page_size(page_size)
                     .prompt()
                 {
-                    Ok(choice) => Ok(vec![parse_and_get_pid(&choice)]),
+                    Ok(choice) => Ok(vec![parse_pid(&choice)]),
                     Err(e) => {
-                        println!("{e}");
+                        eprintln!("{e}");
                         std::process::exit(1);
                     }
                 }
@@ -161,7 +161,7 @@ pub async fn list_process(wide: bool, pattern: Option<String>, users: Option<Str
                         println!("Listing processes matching '{pattern}'");
                         let mut lines = 0;
                         for s in cands {
-                            if re.find(&s).is_some() {
+                            if re.is_match(&s) {
                                 println!("{s}");
                                 lines += 1;
                             }
@@ -240,7 +240,7 @@ async fn test_list_process() {
 #[tokio::test]
 async fn test_parse_and_get_pid() {
     assert_eq!(
-        parse_and_get_pid(" 320282 root     15:29 [kworker/0:2-i915-unordered]"),
+        parse_pid(" 320282 root     15:29 [kworker/0:2-i915-unordered]"),
         "320282"
     );
 
