@@ -1,7 +1,9 @@
 mod utils;
 
 mod args;
+use futures::future::join_all;
 use std::process::exit;
+use std::sync::{Arc, Mutex};
 use tokio::fs;
 
 use gdb::run_gdb;
@@ -30,31 +32,40 @@ async fn main() {
 
     // read and parse from either files or stdin
     if !cli.files.is_empty() {
-        let mut lines = Vec::new();
+        let lines: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
         if cli.files.len() == 1 && cli.files[0] == "-" {
+            println!("Reading stack from STDIN.");
             let stdin = std::io::stdin();
             for line in std::io::BufRead::lines(stdin.lock()) {
                 if let Ok(line) = line {
-                    lines.push(line);
+                    lines.lock().unwrap().push(line);
                 } else {
-                    panic!("Error reading line");
+                    panic!("Error reading line.");
                 }
             }
         } else {
+            let n = cli.files.len();
+            let mut handles = vec![];
+            println!("Reading stack from {n} file(s).");
             for file in cli.files {
-                ensure_file_exists(&file);
-                match fs::read_to_string(file).await {
-                    Ok(contents) => {
-                        lines.push(contents);
+                let line_ref = lines.clone();
+                handles.push(tokio::spawn(async move {
+                    ensure_file_exists(&file);
+                    match fs::read_to_string(&file).await {
+                        Ok(contents) => {
+                            line_ref.lock().unwrap().push(contents);
+                        }
+                        Err(err) => {
+                            eprint!("failed to read from file {}, reason: {}", file, err);
+                        }
                     }
-                    Err(err) => {
-                        panic!("{err}");
-                    }
-                }
+                }));
             }
+
+            join_all(handles).await;
         }
 
-        let contents = lines.join("\n");
+        let contents = lines.lock().unwrap().join("\n");
         handle_content(&contents, cli.raw_mode, cli.unique_mode);
         exit(0);
     }

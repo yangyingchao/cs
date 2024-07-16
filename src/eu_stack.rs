@@ -1,6 +1,5 @@
-use std::sync::{Arc, Mutex};
-
 use futures::future::join_all;
+use std::sync::{Arc, Mutex};
 
 use crate::{
     args::Cli,
