@@ -1,8 +1,8 @@
 mod utils;
 
 mod args;
-use std::fs;
 use std::process::exit;
+use tokio::fs;
 
 use gdb::run_gdb;
 use uniquify::handle_content;
@@ -43,7 +43,7 @@ async fn main() {
         } else {
             for file in cli.files {
                 ensure_file_exists(&file);
-                match fs::read_to_string(file) {
+                match fs::read_to_string(file).await {
                     Ok(contents) => {
                         lines.push(contents);
                     }
