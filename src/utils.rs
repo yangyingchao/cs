@@ -1,7 +1,10 @@
 use inquire::{MultiSelect, Select};
+use pager::Pager;
 use std::{ffi::OsStr, process::Stdio, sync::OnceLock};
 use termion::terminal_size;
 use tokio::process::Command;
+
+use crate::args::Cli;
 
 pub async fn execute_command<S, I>(
     command: &str,
@@ -71,21 +74,19 @@ pub fn get_terminal_size() -> &'static (usize, usize) {
     })
 }
 
-pub async fn choose_process(
-    users: Option<String>,
-    initial: Option<String>,
-    pattern: Option<String>,
-    wide: bool,
-    multi: bool,
-) -> Result<Vec<String>, String> {
+pub async fn choose_process(cli: &Cli) -> Result<Vec<String>, String> {
     let (width, height) = get_terminal_size();
     let page_size: usize = std::cmp::max(7, height - 2) as usize;
-    let columns = width - if multi { 8 } else { 4 };
+    let columns = width - if cli.multi_mode { 8 } else { 4 };
 
-    match get_process_list(users).await {
+    match get_process_list(cli.users.clone()).await {
         Ok(cands) => {
-            let initial = initial.unwrap_or("".to_owned());
-            let cands: Vec<String> = if wide {
+            let initial = if cli.args.is_empty() {
+                ""
+            } else {
+                cli.args[0].as_str()
+            };
+            let cands: Vec<String> = if cli.wide_mode {
                 cands
             } else {
                 cands
@@ -94,7 +95,7 @@ pub async fn choose_process(
                     .collect()
             };
 
-            if let Some(pattern) = pattern {
+            if let Some(pattern) = cli.pattern.clone() {
                 let r_match_pattern = regex::Regex::new(&pattern).unwrap();
                 let r_match_self = regex::Regex::new(&format!(" {} ", std::process::id())).unwrap();
                 let cands: Vec<String> = cands
@@ -108,9 +109,9 @@ pub async fn choose_process(
                 }
 
                 Ok(cands.into_iter().map(|s| parse_pid(&s)).collect())
-            } else if multi {
+            } else if cli.multi_mode {
                 match MultiSelect::new("Choose process: ", cands)
-                    .with_starting_filter_input(&initial)
+                    .with_starting_filter_input(initial)
                     .with_page_size(page_size)
                     .prompt()
                 {
@@ -141,12 +142,12 @@ pub async fn choose_process(
     }
 }
 
-pub async fn list_process(wide: bool, pattern: Option<String>, users: Option<String>) {
+pub async fn list_process(cli: Cli) {
     let (width, _) = get_terminal_size();
     let columns: usize = width - 2;
-    match get_process_list(users).await {
+    match get_process_list(cli.users.clone()).await {
         Ok(cands) => {
-            let cands: Vec<String> = if wide {
+            let cands: Vec<String> = if cli.wide_mode {
                 cands
             } else {
                 cands
@@ -155,7 +156,9 @@ pub async fn list_process(wide: bool, pattern: Option<String>, users: Option<Str
                     .collect()
             };
 
-            if let Some(pattern) = pattern {
+            setup_pager(&cli);
+
+            if let Some(pattern) = cli.args.first() {
                 match regex::Regex::new(&pattern) {
                     Ok(re) => {
                         println!("Listing processes matching '{pattern}'");
@@ -198,6 +201,12 @@ pub fn ensure_file_exists(file: &str) {
     }
 }
 
+pub fn setup_pager(cli: &Cli) {
+    if !cli.no_pager {
+        Pager::new().setup();
+    }
+}
+
 #[tokio::test]
 async fn test_command_execution() {
     if let Ok(result) = execute_command("ls", &["-a", "-l"]).await {
@@ -232,9 +241,14 @@ async fn test_list_process() {
 
     let result = get_process_list(Some("root".to_owned())).await;
     assert!(result.is_ok_and(|x| !x.is_empty()));
+    let mut cli = Cli::default();
+    cli.no_pager = true;
+    list_process(cli).await;
 
-    list_process(false, None, None).await;
-    list_process(false, Some("cs".to_owned()), None).await;
+    let mut cli = Cli::default();
+    cli.no_pager = true;
+    cli.args.push("cs".to_owned());
+    list_process(cli).await;
 }
 
 #[tokio::test]

@@ -2,7 +2,7 @@ use std::process::exit;
 
 use clap::Parser;
 
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 #[command(long_about = None, about = "Tool to show call stack of process(es)",
           arg_required_else_help = true, version, trailing_var_arg=true)]
 pub struct Cli {
@@ -22,16 +22,8 @@ pub struct Cli {
     pub users: Option<String>,
 
     /// List processes
-    #[arg(short='l', long = "list", num_args=0..2,)]
-    pub list: Option<Vec<String>>,
-
-    /// Initial value to filter process
-    #[arg(short = 'i', long = "initial")]
-    pub initial: Option<String>,
-
-    /// Show call stacks of processes whose name matches PATTERN.
-    #[arg(short = 'P', long = "pattern", conflicts_with_all = ["initial", "list"])]
-    pub pattern: Option<String>,
+    #[arg(short = 'l', long = "list", default_value_t = false)]
+    pub list: bool,
 
     /// Wide mode: when showing processes, show all chars in a line
     #[arg(short = 'W', long = "Wide", default_value_t = false)]
@@ -49,30 +41,40 @@ pub struct Cli {
     #[arg(short = 'G', long = "gdb", default_value_t = false)]
     pub gdb_mode: bool,
 
-    ///Raw mode: do not try to simplify callstacks (works only in GDB mode)
+    /// Raw mode: do not try to simplify callstacks (works only in GDB mode)
     #[arg(short = 'R', long = "raw", default_value_t = false)]
     pub raw_mode: bool,
 
-    /// files to read stack from, use "-" for stdin; multiple files will be merged together.
-    #[clap(allow_hyphen_values=true, num_args=0..,)]
-    pub files: Vec<String>,
+    /// Disable pager
+    #[arg(short = 'N', long = "no-pager", default_value_t = false)]
+    pub no_pager: bool,
+
+    /// Show call stacks of processes whose name matches PATTERN.
+    #[arg(short = 'P', long = "pattern")]
+    pub pattern: Option<String>,
+
+    #[clap(allow_hyphen_values=true, num_args=0.., help=r#"Purpose of these args may change based other options:
+1. When listing/choosing processes, this is default initial value or pattern to filter process.
+2. When uniquifying stacks, this could be files to read stack from ("-" for stdin); multiple
+   files will be merged together."#)]
+    pub args: Vec<String>,
 }
 
 impl Cli {
-    fn default() -> Cli {
+    pub fn default() -> Cli {
         Self {
             pids: None,
             core: None,
             executable: None,
             users: None,
-            list: None,
-            initial: None,
+            list: false,
             wide_mode: false,
             multi_mode: false,
             unique_mode: false,
             gdb_mode: false,
             raw_mode: true,
-            files: vec![],
+            args: vec![],
+            no_pager: false,
             pattern: None,
         }
     }
@@ -88,9 +90,16 @@ where
         Cli::default()
     } else {
         let cli = Cli::parse_from(args);
-        if cli.files.len() > 1 && cli.files.contains(&"-".to_owned()) {
+        if cli.args.len() > 1 && cli.args.contains(&"-".to_owned()) {
             eprintln!("stdin should not be used together with other files");
             exit(2);
+        } else if cli.args.len() > 1 {
+            for arg in cli.args.clone() {
+                if arg.starts_with('-') {
+                    eprintln!("Failed to parse arg: {arg}");
+                    exit(2);
+                }
+            }
         }
         cli
     }
@@ -101,15 +110,14 @@ fn test_parse_args() {
     let cli = parse_args(vec!["st", "--pid", "1000"]);
     assert_eq!(cli.pids.unwrap().first().unwrap(), "1000");
     assert!(!cli.unique_mode);
-    assert!(cli.initial.is_none());
     assert!(cli.users.is_none());
     assert!(cli.gdb_mode == false);
-    assert!(cli.files.is_empty());
+    assert!(cli.args.is_empty());
 
     let cli = parse_args(vec!["st", "-U", "-c", "corefile"]);
     assert!(cli.unique_mode);
     assert_eq!(cli.core, Some("corefile".to_owned()));
-    assert!(cli.list.is_none());
+    assert!(!cli.list);
     assert!(cli.executable.is_none());
 
     // -c & -e should be able to work together
@@ -118,29 +126,11 @@ fn test_parse_args() {
     assert_eq!(cli.executable, Some("executable".to_owned()));
 
     let cli = parse_args(vec!["st", "-l", "-u", "someone"]);
-    assert!(cli.list.is_some() && cli.list.unwrap().is_empty());
+    assert!(cli.list);
     assert_eq!(cli.users.unwrap(), "someone");
 
-    let cli = parse_args(vec!["st", "-l", "emacs"]);
-    match cli.list {
-        Some(v) => {
-            assert_eq!(v.len(), 1);
-            assert_eq!(v[0], "emacs");
-        }
-        None => {
-            panic!();
-        }
-    }
-
-    let cli = parse_args(vec!["st", "-i", "pattern1"]);
-    assert!(cli.initial.unwrap() == "pattern1");
-
     // conflict options
-    for args in vec![
-        vec!["st", "-c", "corefile", "-p", "1000"],
-        vec!["st", "-i", "i", "-P", "pattern"],
-        vec!["st", "-l", "i", "-P", "pattern"],
-    ] {
+    for args in vec![vec!["st", "-c", "corefile", "-p", "1000"]] {
         match Cli::try_parse_from(args) {
             Ok(_) => {
                 panic!();
@@ -153,10 +143,10 @@ fn test_parse_args() {
 
     // trailing args should be files
     let cli = parse_args(vec!["st", "file-1", "file-2"]);
-    assert!(cli.files.len() == 2);
-    println!("{:?}", cli.files);
+    assert!(cli.args.len() == 2);
+    println!("{:?}", cli.args);
 
     let cli = parse_args(vec!["st", "-"]);
-    assert!(cli.files.len() == 1);
-    println!("{:?}", cli.files);
+    assert!(cli.args.len() == 1);
+    println!("{:?}", cli.args);
 }

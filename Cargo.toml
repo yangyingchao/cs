@@ -7,7 +7,7 @@ clap = { version = "4.5.6", features = ["derive"] }
 
 [package]
 name = "cs"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2021"
 license = "MIT"
 description = "Call stack tool"
@@ -25,3 +25,4 @@ termion = "4.0.2"
 colored = "2.1.0"
 tokio = { version = "1.38.0", features = ["full", "process"] }
 futures = "0.3.30"
+pager = "0.16.1"
