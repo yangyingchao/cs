@@ -180,7 +180,7 @@ pub fn handle_content(contents: &str, raw: bool, unique: bool) {
 
     if unique {
         if let Err(err) = uniquify_input(&contents) {
-            panic!("{err}");
+            eprintln!("uniquify fail: {err}");
         }
     } else {
         println!("{contents}");

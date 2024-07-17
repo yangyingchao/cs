@@ -74,5 +74,6 @@ pub async fn run_eustack(cli: &Cli) -> Result<(), String> {
         }
     }
 
-    panic!("Needs pid or core file.");
+    eprintln!("Needs pid or core file.");
+    std::process::exit(2);
 }

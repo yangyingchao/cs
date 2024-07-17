@@ -40,7 +40,8 @@ async fn main() {
                 if let Ok(line) = line {
                     lines.lock().unwrap().push(line);
                 } else {
-                    panic!("Error reading line.");
+                    eprint!("Error reading line.");
+                    exit(2);
                 }
             }
         } else {
@@ -88,7 +89,8 @@ async fn main() {
                 cli.pids.replace(pids);
             }
             Err(err) => {
-                panic!("Abort: {err}");
+                eprintln!("Abort: {err}");
+                exit(2);
             }
         }
     }
@@ -105,7 +107,8 @@ async fn main() {
     match if cli.gdb_mode {
         if let Ok((code, _out, _err)) = execute_command("which", ["gdb"]).await {
             if code != 0 {
-                panic!("Failed to find gdb");
+                eprintln!("Failed to find gdb");
+                exit(2);
             }
         };
         run_gdb(&cli).await
