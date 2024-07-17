@@ -63,9 +63,12 @@ jobs:
                   find
             - name: Copy files
               run: |
-                  mkdir out
-                  mv x86_64-unknown-linux-musl/cs out/cs-x86_64-unknown-linux-musl
+                  mkdir -p out/cs-x86_64-unknown-linux-musl
+                  mv x86_64-unknown-linux-musl/cs out/cs-x86_64-unknown-linux-musl/cs
+                  chmod +x out/cs-x86_64-unknown-linux-musl/cs
                   cd out
+                  tar czvf cs-x86_64-unknown-linux-musl.tar.gz  cs-x86_64-unknown-linux-musl
+                  rm -rf cs-x86_64-unknown-linux-musl
                   sha256sum * > sha256sum
             - name: Release
               uses: softprops/action-gh-release@v2
