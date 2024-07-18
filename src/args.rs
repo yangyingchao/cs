@@ -1,6 +1,9 @@
 use std::process::exit;
 
 use clap::Parser;
+use futures::executor::block_on;
+
+use crate::utils::{choose_process, execute_command};
 
 #[derive(Parser, Clone)]
 #[command(long_about = None, about = "Tool to show call stack of process(es)",
@@ -20,6 +23,10 @@ pub struct Cli {
     /// Show processes of users (separated by \",\") when listing/choosing processes
     #[arg(short = 'u', long = "users")]
     pub users: Option<String>,
+
+    /// Initial value to filter process
+    #[arg(short = 'i', long = "initial")]
+    pub initial: Option<String>,
 
     /// List processes
     #[arg(short = 'l', long = "list", default_value_t = false)]
@@ -53,11 +60,9 @@ pub struct Cli {
     #[arg(short = 'P', long = "pattern")]
     pub pattern: Option<String>,
 
-    #[clap(allow_hyphen_values=true, num_args=0.., help=r#"Purpose of these args may change based other options:
-1. When listing/choosing processes, this is default initial value or pattern to filter process.
-2. When uniquifying stacks, this could be files to read stack from ("-" for stdin); multiple
-   files will be merged together."#)]
-    pub args: Vec<String>,
+    /// files to read stack from, use "-" for stdin; multiple files will be merged together.
+    #[clap(allow_hyphen_values=true, num_args=0..,)]
+    pub files: Vec<String>,
 }
 
 impl Cli {
@@ -68,12 +73,13 @@ impl Cli {
             executable: None,
             users: None,
             list: false,
+            initial: None,
             wide_mode: false,
             multi_mode: false,
             unique_mode: false,
             gdb_mode: false,
             raw_mode: true,
-            args: vec![],
+            files: vec![],
             no_pager: false,
             pattern: None,
         }
@@ -89,18 +95,46 @@ where
     if args.len() == 1 {
         Cli::default()
     } else {
-        let cli = Cli::parse_from(args);
-        if cli.args.len() > 1 && cli.args.contains(&"-".to_owned()) {
+        let mut cli = Cli::parse_from(args);
+        if cli.files.len() > 1 && cli.files.contains(&"-".to_owned()) {
             eprintln!("stdin should not be used together with other files");
             exit(2);
-        } else if cli.args.len() > 1 {
-            for arg in cli.args.clone() {
+        } else if cli.files.len() > 1 {
+            for arg in cli.files.clone() {
                 if arg.starts_with('-') {
                     eprintln!("Failed to parse arg: {arg}");
                     exit(2);
                 }
             }
         }
+
+        if !cli.list && cli.files.is_empty() {
+            if !cli.gdb_mode {
+                if let Ok((code, _out, _err)) = block_on(execute_command("which", ["eu-stack"])) {
+                    if code != 0 {
+                        eprintln!("Failed to find eu-stack, will try gdb instead...");
+                        cli.gdb_mode = true;
+                    }
+                };
+            }
+
+            if cli.pids.is_none() && cli.core.is_none() {
+                match block_on(choose_process(&cli)) {
+                    Ok(pids) => {
+                        if pids.is_empty() {
+                            eprintln!("\nNo process is selected.");
+                            exit(1);
+                        }
+                        cli.pids.replace(pids);
+                    }
+                    Err(err) => {
+                        eprintln!("Abort: {err}");
+                        exit(2);
+                    }
+                }
+            }
+        }
+
         cli
     }
 }
@@ -112,7 +146,7 @@ fn test_parse_args() {
     assert!(!cli.unique_mode);
     assert!(cli.users.is_none());
     assert!(cli.gdb_mode == false);
-    assert!(cli.args.is_empty());
+    assert!(cli.files.is_empty());
 
     let cli = parse_args(vec!["st", "-U", "-c", "corefile"]);
     assert!(cli.unique_mode);
@@ -143,10 +177,10 @@ fn test_parse_args() {
 
     // trailing args should be files
     let cli = parse_args(vec!["st", "file-1", "file-2"]);
-    assert!(cli.args.len() == 2);
-    println!("{:?}", cli.args);
+    assert!(cli.files.len() == 2);
+    println!("{:?}", cli.files);
 
     let cli = parse_args(vec!["st", "-"]);
-    assert!(cli.args.len() == 1);
-    println!("{:?}", cli.args);
+    assert!(cli.files.len() == 1);
+    println!("{:?}", cli.files);
 }

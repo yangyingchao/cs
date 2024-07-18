@@ -1,7 +1,15 @@
 use colored::*;
+use futures::future::join_all;
 use pager::Pager;
 use regex::Regex;
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    process::exit,
+    sync::{Arc, Mutex},
+};
+use tokio::fs;
+
+use crate::{args::Cli, utils::ensure_file_exists};
 
 fn sort_and_print_stack(cache: HashMap<String, String>) -> Result<String, String> {
     let mut ordered_cache: HashMap<usize, Vec<(&String, &String)>> = HashMap::new();
@@ -188,6 +196,46 @@ pub fn handle_content(contents: &str, raw: bool, unique: bool) {
     } else {
         println!("{contents}");
     }
+}
+
+pub async fn uniquify_stack_files(cli: Cli) {
+    let lines: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
+    if cli.files.len() == 1 && cli.files[0] == "-" {
+        println!("Reading stack from STDIN.");
+        let stdin = std::io::stdin();
+        for line in std::io::BufRead::lines(stdin.lock()) {
+            if let Ok(line) = line {
+                lines.lock().unwrap().push(line);
+            } else {
+                eprint!("Error reading line.");
+                exit(2);
+            }
+        }
+    } else {
+        let n = cli.files.len();
+        let mut handles = vec![];
+        println!("Reading stack from {n} file(s).");
+        for file in cli.files {
+            ensure_file_exists(&file);
+            let line_ref = lines.clone();
+            handles.push(tokio::spawn(async move {
+                match fs::read_to_string(&file).await {
+                    Ok(contents) => {
+                        line_ref.lock().unwrap().push(contents);
+                    }
+                    Err(err) => {
+                        eprint!("failed to read from file {}, reason: {}", file, err);
+                    }
+                }
+            }));
+        }
+
+        join_all(handles).await;
+    }
+
+    let contents = lines.lock().unwrap().join("\n");
+    handle_content(&contents, cli.raw_mode, cli.unique_mode);
+    exit(0);
 }
 
 #[test]

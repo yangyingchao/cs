@@ -81,11 +81,7 @@ pub async fn choose_process(cli: &Cli) -> Result<Vec<String>, String> {
 
     match get_process_list(cli.users.clone()).await {
         Ok(cands) => {
-            let initial = if cli.args.is_empty() {
-                ""
-            } else {
-                cli.args[0].as_str()
-            };
+            let initial = cli.initial.clone().unwrap_or("".to_owned());
             let cands: Vec<String> = if cli.wide_mode {
                 cands
             } else {
@@ -111,7 +107,7 @@ pub async fn choose_process(cli: &Cli) -> Result<Vec<String>, String> {
                 Ok(cands.into_iter().map(|s| parse_pid(&s)).collect())
             } else if cli.multi_mode {
                 match MultiSelect::new("Choose process: ", cands)
-                    .with_starting_filter_input(initial)
+                    .with_starting_filter_input(&initial)
                     .with_page_size(page_size)
                     .prompt()
                 {
@@ -158,8 +154,8 @@ pub async fn list_process(cli: Cli) {
 
             setup_pager(&cli);
 
-            if let Some(pattern) = cli.args.first() {
-                match regex::Regex::new(&pattern) {
+            if let Some(pattern) = cli.files.first() {
+                match regex::Regex::new(pattern) {
                     Ok(re) => {
                         println!("Listing processes matching '{pattern}'");
                         let mut lines = 0;
@@ -192,6 +188,8 @@ pub async fn list_process(cli: Cli) {
             std::process::exit(1);
         }
     }
+
+    std::process::exit(0);
 }
 
 pub fn ensure_file_exists(file: &str) {
@@ -202,7 +200,7 @@ pub fn ensure_file_exists(file: &str) {
 }
 
 pub fn setup_pager(cli: &Cli) {
-    if !cli.no_pager {
+    if !cli.no_pager && std::env::var("TERM").unwrap_or("xterm".to_string()) != "dumb" {
         Pager::new().setup();
     }
 }
@@ -247,7 +245,7 @@ async fn test_list_process() {
 
     let mut cli = Cli::default();
     cli.no_pager = true;
-    cli.args.push("cs".to_owned());
+    cli.files.push("cs".to_owned());
     list_process(cli).await;
 }
 

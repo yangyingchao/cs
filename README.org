@@ -20,19 +20,17 @@ helpful, so I've decided to rewrite them in Rust, making them usable outside of 
 #+begin_example
 Tool to show call stack of process(es)
 
-Usage: cs [OPTIONS] [ARGS]...
+Usage: cs [OPTIONS] [FILES]...
 
 Arguments:
-  [ARGS]...  Purpose of these args may change based other options:
-             1. When listing/choosing processes, this is default initial value or pattern to filter process.
-             2. When uniquifying stacks, this could be files to read stack from ("-" for stdin); multiple
-                files will be merged together.
+  [FILES]...  files to read stack from, use "-" for stdin; multiple files will be merged together
 
 Options:
   -p, --pid <PIDS>               Show stack of process PID
   -c, --core <CORE>              Show stack found in COREFILE
   -e, --executable <EXECUTABLE>  (optional) EXECUTABLE that produced COREFILE
   -u, --users <USERS>            Show processes of users (separated by \",\") when listing/choosing processes
+  -i, --initial <INITIAL>        Initial value to filter process
   -l, --list                     List processes
   -W, --Wide                     Wide mode: when showing processes, show all chars in a line
   -M, --multi                    Multi mode: when choosing processes, to select multiple processes
