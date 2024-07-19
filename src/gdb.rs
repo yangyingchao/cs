@@ -9,8 +9,7 @@ use crate::{
 
 async fn do_run_gdb(args: Vec<&str>, unique: bool, raw: bool) -> Result<String, String> {
     match execute_command("gdb", args).await {
-        Ok(result) => {
-            let (code, out, err) = result;
+        Ok((code, out, err)) => {
             if code <= 1 {
                 if !err.is_empty() {
                     eprintln!("Warnings reported: {err}");
@@ -37,8 +36,8 @@ pub async fn run_gdb(cli: &Cli) {
 
     if let Some(pids) = &cli.pids {
         let mut handles = vec![];
-        let outputs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
-        let errors: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
+        let outputs = Arc::new(Mutex::new(vec![]));
+        let errors = Arc::new(Mutex::new(vec![]));
 
         let unique = cli.unique_mode;
         let raw = cli.raw_mode;

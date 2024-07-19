@@ -175,7 +175,7 @@ pub fn uniquify_gdb(input: &str) -> Result<String, String> {
     sort_and_print_stack(cache)
 }
 
-pub fn handle_content(contents: &str, raw: bool, unique: bool) {
+fn handle_content(contents: &str, raw: bool, unique: bool) {
     Pager::new().setup();
     let contents = if raw {
         contents.to_owned()

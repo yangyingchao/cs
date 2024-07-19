@@ -63,13 +63,13 @@ jobs:
                   find
             - name: Copy files
               run: |
-                  staging="cs-${{ env.RELEASE_VERSION }}-x86_64-unknown-linux-musl"
+                  staging="cs-${{ github.ref_name }}-x86_64-unknown-linux-musl"
                   mkdir -p out/"$staging"
                   mv x86_64-unknown-linux-musl/cs out/"$staging"/cs
                   chmod +x out/$staging/cs
                   cd out
                   tar czvf "$staging".tar.gz  "$staging"
-                  rm -rf cs-x86_64-unknown-linux-musl
+                  rm -rf "$staging"
                   sha256sum * > sha256sum
             - name: Release
               uses: softprops/action-gh-release@v2

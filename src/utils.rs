@@ -40,8 +40,12 @@ async fn get_process_list(users: Option<String>) -> Result<Vec<String>, String> 
         .map(|s| s.to_owned())
         .collect();
     if let Some(users) = users {
-        let new_args = ["-u".to_owned(), users.clone(), "-U".to_owned(), users];
-        args.extend(new_args);
+        args.extend(vec![
+            "-u".to_string(),
+            users.clone(),
+            "-U".to_string(),
+            users.clone(),
+        ])
     } else {
         args.push("-A".to_owned());
     };

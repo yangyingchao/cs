@@ -9,8 +9,7 @@ use crate::{
 
 async fn do_run_eustack(args: Vec<String>, unique: bool) -> Result<String, String> {
     match execute_command("eu-stack", args).await {
-        Ok(result) => {
-            let (code, out, err) = result;
+        Ok((code, out, err)) => {
             if code <= 1 {
                 if !err.is_empty() {
                     eprintln!("Warnings reported: {err}");
@@ -56,8 +55,8 @@ pub async fn run_eustack(cli: &Cli) {
 
     if let Some(pids) = &cli.pids {
         let mut handles = vec![];
-        let outputs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
-        let errors: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
+        let outputs = Arc::new(Mutex::new(vec![]));
+        let errors = Arc::new(Mutex::new(vec![]));
 
         let unique = cli.unique_mode;
         for pid in pids.clone() {
