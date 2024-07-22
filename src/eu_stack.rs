@@ -7,25 +7,57 @@ use crate::{
     utils::{ensure_file_exists, execute_command, setup_pager},
 };
 
-async fn do_run_eustack(args: Vec<String>, unique: bool) -> Result<String, String> {
-    match execute_command("eu-stack", args).await {
-        Ok((code, out, err)) => {
-            if code <= 1 {
-                if !err.is_empty() {
-                    eprintln!("Warnings reported: {err}");
-                }
+async fn do_run_eustack(
+    args: Vec<String>,
+    unique: bool,
+    interval: Option<f32>,
+    count: i32,
+) -> Result<String, String> {
+    let mut output = vec![];
+    let mut count = if interval.is_none() { 1 } else { count };
+    let sleep = interval.unwrap_or(0.0);
+    let prefix = if count == 1 {
+        "".to_owned()
+    } else {
+        format!("Interval: {}, Count: {}", sleep, count)
+    };
 
-                if unique {
-                    uniquify_eustack(&out)
+    loop {
+        match execute_command("eu-stack", &args).await {
+            Ok((code, out, err)) => {
+                if code <= 1 {
+                    if !err.is_empty() {
+                        eprintln!("Warnings reported: {err}");
+                    }
+
+                    output.push(out);
                 } else {
-                    Ok(out)
+                    return Err(err);
                 }
-            } else {
-                Err(err)
+            }
+            Err(err) => {
+                return Err(err.to_string());
             }
         }
-        Err(err) => Err(err.to_string()),
+
+        count -= 1;
+        if count == 0 {
+            break;
+        }
+
+        tokio::time::sleep(tokio::time::Duration::from_secs_f32(sleep)).await;
     }
+
+    let result = if unique {
+        match uniquify_eustack(&output.join("\n")) {
+            Ok(o) => format!("{}\n{}", prefix, o),
+            Err(err) => return Err(err.to_string()),
+        }
+    } else {
+        format!("{}\n{}", prefix, output.join("\n"))
+    };
+
+    Ok(result)
 }
 
 pub async fn run_eustack(cli: &Cli) {
@@ -41,7 +73,7 @@ pub async fn run_eustack(cli: &Cli) {
         };
 
         setup_pager(cli);
-        match do_run_eustack(args, cli.unique_mode).await {
+        match do_run_eustack(args, cli.unique_mode, None, 1).await {
             Ok(result) => {
                 println!("{result}");
                 std::process::exit(0);
@@ -62,6 +94,8 @@ pub async fn run_eustack(cli: &Cli) {
         for pid in pids.clone() {
             let output_ref = outputs.clone();
             let error_ref = errors.clone();
+            let interval = cli.interval;
+            let count = cli.count;
             handles.push(tokio::spawn(async move {
                 let args = vec!["-p".to_string(), pid.to_string()];
                 println!(
@@ -69,7 +103,7 @@ pub async fn run_eustack(cli: &Cli) {
                     pid,
                     std::thread::current().id()
                 );
-                match do_run_eustack(args, unique).await {
+                match do_run_eustack(args, unique, interval, count).await {
                     Ok(output) => {
                         output_ref.lock().unwrap().push(output);
                     }

@@ -1,9 +1,6 @@
 use std::process::exit;
 
 use clap::Parser;
-use futures::executor::block_on;
-
-use crate::utils::{choose_process, execute_command};
 
 #[derive(Parser, Clone)]
 #[command(long_about = None, about = "Tool to show call stack of process(es)",
@@ -31,6 +28,21 @@ pub struct Cli {
     /// List processes
     #[arg(short = 'l', long = "list", default_value_t = false)]
     pub list: bool,
+
+    /// Specify  update  interval as seconds, it should not be quicker than 0.1.
+    /// Applies only when getting callstack from running app.
+    #[arg(short = 't', long = "interval")]
+    pub interval: Option<f32>,
+
+    /// Specify number of sampling. Applies only when getting callstack from running app, and
+    /// `interval` is specified.
+    #[arg(
+        short = 'n',
+        long = "count",
+        default_value_t = 1,
+        requires = "interval"
+    )]
+    pub count: i32,
 
     /// Wide mode: when showing processes, show all chars in a line
     #[arg(short = 'W', long = "Wide", default_value_t = false)]
@@ -74,6 +86,8 @@ impl Cli {
             users: None,
             list: false,
             initial: None,
+            interval: None,
+            count: 1,
             wide_mode: false,
             multi_mode: false,
             unique_mode: false,
@@ -108,63 +122,43 @@ where
             }
         }
 
-        if !cli.list && cli.files.is_empty() {
-            if !cli.gdb_mode {
-                if let Ok((code, _out, _err)) = block_on(execute_command("which", ["eu-stack"])) {
-                    if code != 0 {
-                        eprintln!("Failed to find eu-stack, will try gdb instead...");
-                        cli.gdb_mode = true;
-                    }
-                };
+        // check and update interval, minimum value should be 0.1s
+        if let Some(interval) = cli.interval {
+            if interval < 0.1 {
+                cli.interval.replace(0.1);
             }
-
-            if cli.pids.is_none() && cli.core.is_none() {
-                match block_on(choose_process(&cli)) {
-                    Ok(pids) => {
-                        if pids.is_empty() {
-                            eprintln!("\nNo process is selected.");
-                            exit(1);
-                        }
-                        cli.pids.replace(pids);
-                    }
-                    Err(err) => {
-                        eprintln!("Abort: {err}");
-                        exit(2);
-                    }
-                }
-            }
-        }
+        };
 
         cli
     }
 }
 
-#[test]
-fn test_parse_args() {
-    let cli = parse_args(vec!["st", "--pid", "1000"]);
+#[tokio::test]
+async fn test_parse_args() {
+    let cli = parse_args(vec!["cs", "--pid", "1000"]);
     assert_eq!(cli.pids.unwrap().first().unwrap(), "1000");
     assert!(!cli.unique_mode);
     assert!(cli.users.is_none());
     assert!(cli.gdb_mode == false);
     assert!(cli.files.is_empty());
 
-    let cli = parse_args(vec!["st", "-U", "-c", "corefile"]);
+    let cli = parse_args(vec!["cs", "-U", "-c", "corefile"]);
     assert!(cli.unique_mode);
     assert_eq!(cli.core, Some("corefile".to_owned()));
     assert!(!cli.list);
     assert!(cli.executable.is_none());
 
     // -c & -e should be able to work together
-    let cli = parse_args(vec!["st", "-c", "corefile", "-e", "executable"]);
+    let cli = parse_args(vec!["cs", "-c", "corefile", "-e", "executable"]);
     assert_eq!(cli.core, Some("corefile".to_owned()));
     assert_eq!(cli.executable, Some("executable".to_owned()));
 
-    let cli = parse_args(vec!["st", "-l", "-u", "someone"]);
+    let cli = parse_args(vec!["cs", "-l", "-u", "someone"]);
     assert!(cli.list);
     assert_eq!(cli.users.unwrap(), "someone");
 
     // conflict options
-    for args in vec![vec!["st", "-c", "corefile", "-p", "1000"]] {
+    for args in vec![vec!["cs", "-c", "corefile", "-p", "1000"]] {
         match Cli::try_parse_from(args) {
             Ok(_) => {
                 panic!();
@@ -176,11 +170,15 @@ fn test_parse_args() {
     }
 
     // trailing args should be files
-    let cli = parse_args(vec!["st", "file-1", "file-2"]);
+    let cli = parse_args(vec!["cs", "file-1", "file-2"]);
     assert!(cli.files.len() == 2);
     println!("{:?}", cli.files);
 
-    let cli = parse_args(vec!["st", "-"]);
+    let cli = parse_args(vec!["cs", "-"]);
     assert!(cli.files.len() == 1);
     println!("{:?}", cli.files);
+
+    let cli = parse_args(vec!["cs", "-t", "0.001", "-n", "3"]);
+    assert_eq!(cli.interval.unwrap(), 0.1);
+    assert_eq!(cli.count, 3);
 }

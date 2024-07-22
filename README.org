@@ -32,6 +32,8 @@ Options:
   -u, --users <USERS>            Show processes of users (separated by \",\") when listing/choosing processes
   -i, --initial <INITIAL>        Initial value to filter process
   -l, --list                     List processes
+  -t, --interval <INTERVAL>      Specify  update  interval as seconds, it should not be quicker than 0.1. Applies only when getting callstack from running app
+  -n, --count <COUNT>            Specify number of sampling. Applies only when getting callstack from running app, and `interval` is specified [default: 1]
   -W, --Wide                     Wide mode: when showing processes, show all chars in a line
   -M, --multi                    Multi mode: when choosing processes, to select multiple processes
   -U, --unique                   Unique mode: when showing call stack, show only unique ones
@@ -57,3 +59,6 @@ Usage examples:
 
 - =cs -U -P google.chrome= \\
   Show unique stack of all processes of google chrome
+
+- =cs -U -p 90588 -t 0.5 -n 3= \\
+  Get callstack for PID 90588 for 3 times with interval 0.5 seconds, then uniquify the output.
