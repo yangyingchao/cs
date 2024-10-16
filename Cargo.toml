@@ -7,7 +7,7 @@ clap = { version = "4.5.6", features = ["derive"] }
 
 [package]
 name = "cs"
-version = "0.1.13"
+version = "0.1.14"
 edition = "2021"
 license = "MIT"
 description = "Call stack tool"
