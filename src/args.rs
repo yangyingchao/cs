@@ -4,7 +4,15 @@ use clap::Parser;
 
 #[derive(Parser, Clone)]
 #[command(long_about = None, about = "Tool to show call stack of process(es)",
-          arg_required_else_help = true, version, trailing_var_arg=true)]
+    arg_required_else_help = true, version, trailing_var_arg=true,
+    after_help = r"Usages Example:
+  - `cs`:                       Choose process interactive and show's its call stack
+  - `cs -l -u user`:            Show processes of USER.
+  - `cs -p 905 -U`:             Show uniue stack for process `90588`
+  - `cs -U -P google.chrome`:   Show unique stack of all processes of google chrome
+  - `cs -U -p 905 -t 0.5 -n 3`: Get callstack for PID 905 for 3 times with interval 0.5 seconds, then uniquify the output.
+
+")]
 pub struct Cli {
     #[arg(short = 'p', long = "pid", help = "Show stack of process PID")]
     pub pids: Option<Vec<String>>,
