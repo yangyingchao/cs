@@ -103,12 +103,16 @@ pub async fn run_gdb(cli: &Cli) {
 
         join_all(handles).await;
         setup_pager(cli);
-
         if !errors.lock().unwrap().is_empty() {
             eprintln!(
                 "error detected on process: {}",
                 errors.lock().unwrap().join(",")
             );
+
+            let outputs = outputs.lock().unwrap();
+            if !outputs.is_empty() {
+                println!("{}", outputs.join("\n"));
+            }
             std::process::exit(2);
         } else {
             println!("{}", outputs.lock().unwrap().join("\n"));

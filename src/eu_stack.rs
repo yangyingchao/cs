@@ -122,6 +122,11 @@ pub async fn run_eustack(cli: &Cli) {
                 "error detected on process: {}",
                 errors.lock().unwrap().join(",")
             );
+
+            let outputs = outputs.lock().unwrap();
+            if !outputs.is_empty() {
+                println!("{}", outputs.join("\n"));
+            }
             std::process::exit(2);
         } else {
             println!("{}", outputs.lock().unwrap().join("\n"));
