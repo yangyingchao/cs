@@ -44,7 +44,7 @@ Options:
   -h, --help                     Print help
   -V, --version                  Print version
 
-Usages Example:
+Usages Examples:
   - `cs`:                       Choose process interactive and show's its call stack
   - `cs -l -u user`:            Show processes of USER.
   - `cs -p 905 -U`:             Show uniue stack for process `90588`
