@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use crate::{
     args::Cli,
     uniquify::{simplify_stack, uniquify_gdb},
-    utils::{execute_command, setup_pager},
+    utils::{display_result, execute_command},
 };
 
 async fn do_run_gdb(
@@ -102,22 +102,7 @@ pub async fn run_gdb(cli: &Cli) {
         }
 
         join_all(handles).await;
-        setup_pager(cli);
-        if !errors.lock().unwrap().is_empty() {
-            eprintln!(
-                "error detected on process: {}",
-                errors.lock().unwrap().join(",")
-            );
-
-            let outputs = outputs.lock().unwrap();
-            if !outputs.is_empty() {
-                println!("{}", outputs.join("\n"));
-            }
-            std::process::exit(2);
-        } else {
-            println!("{}", outputs.lock().unwrap().join("\n"));
-            std::process::exit(0);
-        }
+        display_result(cli, errors, outputs);
     }
 
     eprintln!("Needs pid or core file.");

@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use crate::{
     args::Cli,
     uniquify::uniquify_eustack,
-    utils::{ensure_file_exists, execute_command, setup_pager},
+    utils::{display_result, ensure_file_exists, execute_command, setup_pager},
 };
 
 async fn do_run_eustack(
@@ -116,22 +116,7 @@ pub async fn run_eustack(cli: &Cli) {
         }
 
         join_all(handles).await;
-        setup_pager(cli);
-        if !errors.lock().unwrap().is_empty() {
-            eprintln!(
-                "error detected on process: {}",
-                errors.lock().unwrap().join(",")
-            );
-
-            let outputs = outputs.lock().unwrap();
-            if !outputs.is_empty() {
-                println!("{}", outputs.join("\n"));
-            }
-            std::process::exit(2);
-        } else {
-            println!("{}", outputs.lock().unwrap().join("\n"));
-            std::process::exit(0);
-        }
+        display_result(cli, errors, outputs);
     }
 
     eprintln!("Needs pid or core file.");

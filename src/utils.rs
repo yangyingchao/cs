@@ -1,5 +1,6 @@
 use inquire::{MultiSelect, Select};
 use pager::Pager;
+use std::sync::{Arc, Mutex};
 use std::{ffi::OsStr, process::Stdio, sync::OnceLock};
 use termion::terminal_size;
 use tokio::process::Command;
@@ -206,6 +207,38 @@ pub fn ensure_file_exists(file: &str) {
 pub fn setup_pager(cli: &Cli) {
     if !cli.no_pager && std::env::var("TERM").unwrap_or("xterm".to_string()) != "dumb" {
         Pager::new().setup();
+    }
+}
+
+pub fn display_result(
+    cli: &Cli,
+    errors: Arc<Mutex<Vec<String>>>,
+    outputs: Arc<Mutex<Vec<String>>>,
+) {
+    if !errors.lock().unwrap().is_empty() {
+        let outputs = outputs.lock().unwrap();
+        if outputs.is_empty() {
+            eprintln!(
+                "error detected on process: {}, no stacks to show...",
+                errors.lock().unwrap().join(",")
+            );
+        } else {
+            eprintln!(
+                "error detected on process: {}, press ENTER to continue...",
+                errors.lock().unwrap().join(",")
+            );
+            use std::io::{stdin, Read};
+            let mut stdin_handle = stdin().lock();
+            let mut byte = [0_u8];
+            stdin_handle.read_exact(&mut byte).unwrap();
+            setup_pager(cli);
+            println!("{}", outputs.join("\n"));
+        }
+        std::process::exit(2);
+    } else {
+        setup_pager(cli);
+        println!("{}", outputs.lock().unwrap().join("\n"));
+        std::process::exit(0);
     }
 }
 
