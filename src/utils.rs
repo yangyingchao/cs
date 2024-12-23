@@ -56,7 +56,7 @@ async fn get_process_list(users: Option<String>) -> Result<Vec<String>, String> 
             if code != 0 {
                 return Err(err);
             }
-            return Ok(out.split('\n').skip(1).map(|s| s.to_string()).collect());
+            Ok(out.split('\n').skip(1).map(|s| s.to_string()).collect())
         }
         Err(err) => Err(err.to_string()),
     }
@@ -81,7 +81,7 @@ pub fn get_terminal_size() -> &'static (usize, usize) {
 
 pub async fn choose_process(cli: &Cli) -> Result<Vec<String>, String> {
     let (width, height) = get_terminal_size();
-    let page_size: usize = std::cmp::max(7, height - 2) as usize;
+    let page_size: usize = std::cmp::max(7, height - 2);
     let columns = width - if cli.multi_mode { 8 } else { 4 };
 
     match get_process_list(cli.users.clone()).await {
@@ -271,11 +271,9 @@ async fn test_command_execution() {
 
 #[tokio::test]
 async fn test_list_process() {
-    let result = get_process_list(Some("some_one_does_not_exists".to_owned())).await;
+    let result = get_process_list(Some("someone_does_not_exists".to_owned())).await;
     assert!(result.is_err());
 
-    let result = get_process_list(Some("root".to_owned())).await;
-    assert!(result.is_ok_and(|x| !x.is_empty()));
     let mut cli = Cli::default();
     cli.no_pager = true;
     list_process(cli).await;

@@ -246,14 +246,14 @@ fn test_regex_tid() {
         assert_eq!(m.name("tid").unwrap().as_str(), "15");
         assert_eq!(m.name("lwp").unwrap().as_str(), "1175");
     } else {
-        assert!(false);
+        panic!();
     };
 
     if let Some(m) = re.captures(r#"Thread 13 (LWP 258729 "tokio-runtime-w"):"#) {
         assert_eq!(m.name("tid").unwrap().as_str(), "13");
         assert_eq!(m.name("lwp").unwrap().as_str(), "258729");
     } else {
-        assert!(false);
+        panic!();
     };
 }
 
@@ -353,5 +353,5 @@ Thread 1 (Thread 0x7f29ce816740 (LWP 37747) "test"):
 
     let result = simplify_stack(input);
     println!("{result}");
-    assert!(result.find("in func1 () at").is_none());
+    assert!(!result.contains("in func1 () at"));
 }

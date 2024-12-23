@@ -147,7 +147,7 @@ async fn test_parse_args() {
     assert_eq!(cli.pids.unwrap().first().unwrap(), "1000");
     assert!(!cli.unique_mode);
     assert!(cli.users.is_none());
-    assert!(cli.gdb_mode == false);
+    assert!(!cli.gdb_mode);
     assert!(cli.files.is_empty());
 
     let cli = parse_args(vec!["cs", "-U", "-c", "corefile"]);
@@ -166,7 +166,7 @@ async fn test_parse_args() {
     assert_eq!(cli.users.unwrap(), "someone");
 
     // conflict options
-    for args in vec![vec!["cs", "-c", "corefile", "-p", "1000"]] {
+    for args in [vec!["cs", "-c", "corefile", "-p", "1000"]] {
         match Cli::try_parse_from(args) {
             Ok(_) => {
                 panic!();

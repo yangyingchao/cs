@@ -10,7 +10,7 @@ updates:
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
       # We release on Tuesdays and open dependabot PRs will rebase after the
       # version bump and thus consume unnecessary workers during release, thus
       # let's open new ones on Wednesday
@@ -29,5 +29,5 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "monthly"
       day: "wednesday"
