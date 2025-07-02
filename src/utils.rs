@@ -36,7 +36,7 @@ fn parse_pid(s: &str) -> String {
 }
 
 async fn get_process_list(users: Option<String>) -> Result<Vec<String>, String> {
-    let mut args: Vec<String> = vec!["-o", "pid,user,stime,cmd"]
+    let mut args: Vec<String> = vec!["-o", "pid,ppid,user,stime,cmd"]
         .into_iter()
         .map(|s| s.to_owned())
         .collect();

@@ -97,7 +97,12 @@ pub async fn run_eustack(cli: &Cli) {
             let interval = cli.interval;
             let count = cli.count;
             handles.push(tokio::spawn(async move {
-                let args = vec!["-p".to_string(), pid.to_string()];
+                let args = vec![
+                    "-n".to_string(),
+                    "0".to_string(),
+                    "-p".to_string(),
+                    pid.to_string(),
+                ];
                 println!(
                     "Run for process: {:?} in thread: {:?}",
                     pid,
