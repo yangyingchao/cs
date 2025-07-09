@@ -76,14 +76,17 @@ pub async fn run_gdb(cli: &Cli) {
             let error_ref = errors.clone();
             let interval = cli.interval;
             let count = cli.count;
+            let command = format!(
+                "thread apply all backtrace {}",
+                if cli.frames == 0 {
+                    "full".to_string()
+                } else {
+                    cli.frames.to_string()
+                }
+            );
+
             handles.push(tokio::spawn(async move {
-                let args = vec![
-                    "--batch",
-                    "-p",
-                    pid.as_str(),
-                    "-ex",
-                    "thread apply all backtrace",
-                ];
+                let args = vec!["--batch", "-p", pid.as_str(), "-ex", command.as_ref()];
                 println!(
                     "Run for process: {:?} in thread: {:?}",
                     pid,

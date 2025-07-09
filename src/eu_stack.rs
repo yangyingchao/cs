@@ -96,10 +96,11 @@ pub async fn run_eustack(cli: &Cli) {
             let error_ref = errors.clone();
             let interval = cli.interval;
             let count = cli.count;
+            let frames = cli.frames;
             handles.push(tokio::spawn(async move {
                 let args = vec![
                     "-n".to_string(),
-                    "0".to_string(),
+                    frames.to_string(),
                     "-p".to_string(),
                     pid.to_string(),
                 ];

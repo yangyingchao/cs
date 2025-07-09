@@ -52,6 +52,10 @@ pub struct Cli {
     )]
     pub count: i32,
 
+    /// Specify number of frames when getting call stack, 0 means unlimited, default to 2048.
+    #[arg(short = 'f', long = "frames", default_value_t = 2048)]
+    pub frames: i32,
+
     /// Wide mode: when showing processes, show all chars in a line
     #[arg(short = 'W', long = "Wide", default_value_t = false)]
     pub wide_mode: bool,
@@ -68,7 +72,7 @@ pub struct Cli {
     #[arg(short = 'G', long = "gdb", default_value_t = false)]
     pub gdb_mode: bool,
 
-    /// Raw mode: do not try to simplify callstacks (works only in GDB mode)
+    /// Raw mode: do not try to simplify callstacks (works with `-G` only)
     #[arg(short = 'R', long = "raw", default_value_t = false)]
     pub raw_mode: bool,
 
@@ -96,6 +100,7 @@ impl Cli {
             initial: None,
             interval: None,
             count: 1,
+            frames: 2048,
             wide_mode: false,
             multi_mode: false,
             unique_mode: false,
