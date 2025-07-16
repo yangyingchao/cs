@@ -29,7 +29,7 @@ Options:
   -p, --pid <PIDS>               Show stack of process PID
   -c, --core <CORE>              Show stack found in COREFILE
   -e, --executable <EXECUTABLE>  (optional) EXECUTABLE that produced COREFILE
-  -u, --users <USERS>            Show processes of users (separated by \",\") when listing/choosing processes
+  -u, --users <USERS>            Show processes of users (separated by ",") when listing/choosing processes
   -i, --initial <INITIAL>        Initial value to filter process
   -l, --list                     List processes
   -t, --interval <INTERVAL>      Specify  update  interval as seconds, it should not be quicker than 0.1. Applies only when getting callstack from running app
