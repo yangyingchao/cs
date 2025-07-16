@@ -25,7 +25,7 @@ pub struct Cli {
     #[arg(short = 'e', long = "executable", conflicts_with = "pids")]
     pub executable: Option<String>,
 
-    /// Show processes of users (separated by \",\") when listing/choosing processes
+    /// Show processes of users (separated by ",") when listing/choosing processes
     #[arg(short = 'u', long = "users")]
     pub users: Option<String>,
 

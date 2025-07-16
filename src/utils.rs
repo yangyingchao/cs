@@ -263,7 +263,7 @@ async fn test_command_execution() {
     };
 
     if let Err(err) = execute_command("command_not_exist", &["-a", "-l"]).await {
-        eprintln!("{}", err);
+        eprintln!("{err}");
     } else {
         panic!();
     };
@@ -292,5 +292,5 @@ async fn test_parse_and_get_pid() {
     );
 
     let s = terminal_size();
-    println!("S: {:?}", s);
+    println!("S: {s:?}");
 }

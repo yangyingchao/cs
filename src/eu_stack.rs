@@ -19,7 +19,7 @@ async fn do_run_eustack(
     let prefix = if count == 1 {
         "".to_owned()
     } else {
-        format!("Interval: {}, Count: {}", sleep, count)
+        format!("Interval: {sleep}, Count: {count}")
     };
 
     loop {
@@ -50,7 +50,7 @@ async fn do_run_eustack(
 
     let result = if unique {
         match uniquify_eustack(&output.join("\n")) {
-            Ok(o) => format!("{}\n{}", prefix, o),
+            Ok(o) => format!("{prefix}\n{o}"),
             Err(err) => return Err(err.to_string()),
         }
     } else {
