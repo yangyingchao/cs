@@ -39,20 +39,22 @@ pub struct Cli {
 
     /// Specify  update  interval as seconds, it should not be quicker than 0.1.
     /// Applies only when getting callstack from running app.
-    #[arg(short = 't', long = "interval")]
+    #[arg(short = 't', long = "interval", verbatim_doc_comment)]
     pub interval: Option<f32>,
 
-    /// Specify number of sampling. Applies only when getting callstack from running app, and
-    /// `interval` is specified.
+    /// Specify number of sampling.
+    /// Applies only when getting callstack from running app, and `interval`
+    /// is specified.
     #[arg(
         short = 'n',
         long = "count",
         default_value_t = 1,
-        requires = "interval"
+        requires = "interval",
+        verbatim_doc_comment
     )]
     pub count: i32,
 
-    /// Specify number of frames when getting call stack, 0 means unlimited, default to 2048.
+    /// Specify number of frames when getting call stack, 0 means unlimited.
     #[arg(short = 'f', long = "frames", default_value_t = 2048)]
     pub frames: i32,
 
