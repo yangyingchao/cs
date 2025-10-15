@@ -102,7 +102,7 @@ pub async fn run_eustack(cli: &Cli) {
                     "-n".to_string(),
                     frames.to_string(),
                     "-p".to_string(),
-                    pid.to_string(),
+                    format!("{}", pid),
                 ];
                 println!(
                     "Run for process: {:?} in thread: {:?}",
@@ -115,7 +115,7 @@ pub async fn run_eustack(cli: &Cli) {
                     }
                     Err(err) => {
                         eprintln!("Process {pid} returns error: {err}");
-                        error_ref.lock().unwrap().push(pid);
+                        error_ref.lock().unwrap().push(pid.to_string());
                     }
                 }
             }));

@@ -29,10 +29,10 @@ where
     Ok((exit_code, stdout, stderr))
 }
 
-fn parse_pid(s: &str) -> String {
+fn parse_pid(s: &str) -> i32 {
     let r_match_pid = regex::Regex::new(r#"\s*(?P<pid>\d+)\s+"#).unwrap();
     let m = r_match_pid.captures(s).expect("capture fails");
-    m.name("pid").unwrap().as_str().to_string()
+    m.name("pid").unwrap().as_str().parse::<i32>().unwrap()
 }
 
 async fn get_process_list(users: Option<String>) -> Result<Vec<String>, String> {
@@ -79,7 +79,7 @@ pub fn get_terminal_size() -> &'static (usize, usize) {
     })
 }
 
-pub async fn choose_process(cli: &Cli) -> Result<Vec<String>, String> {
+pub async fn choose_process(cli: &Cli) -> Result<Vec<i32>, String> {
     let (width, height) = get_terminal_size();
     let page_size: usize = std::cmp::max(7, height - 2);
     let columns = width - if cli.multi_mode { 8 } else { 4 };
@@ -297,7 +297,7 @@ async fn test_list_process() {
 async fn test_parse_and_get_pid() {
     assert_eq!(
         parse_pid(" 320282 root     15:29 [kworker/0:2-i915-unordered]"),
-        "320282"
+        320282
     );
 
     let s = terminal_size();

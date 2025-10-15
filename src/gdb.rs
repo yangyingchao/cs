@@ -8,7 +8,7 @@ use crate::{
 };
 
 async fn do_run_gdb(
-    args: Vec<&str>,
+    args: Vec<String>,
     unique: bool,
     raw: bool,
     interval: Option<f32>,
@@ -86,7 +86,13 @@ pub async fn run_gdb(cli: &Cli) {
             );
 
             handles.push(tokio::spawn(async move {
-                let args = vec!["--batch", "-p", pid.as_str(), "-ex", command.as_ref()];
+                let args = vec![
+                    "--batch".to_string(),
+                    "-p".to_string(),
+                    format!("{}", pid),
+                    "-ex".to_string(),
+                    command,
+                ];
                 println!(
                     "Run for process: {:?} in thread: {:?}",
                     pid,
@@ -98,7 +104,7 @@ pub async fn run_gdb(cli: &Cli) {
                     }
                     Err(err) => {
                         eprintln!("Process {pid} returns error: {err}");
-                        error_ref.lock().unwrap().push(pid);
+                        error_ref.lock().unwrap().push(pid.to_string());
                     }
                 }
             }));

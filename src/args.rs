@@ -17,7 +17,7 @@ use clap::Parser;
 pub struct Cli {
     /// Show stack of process PID
     #[arg(short = 'p', long = "pid")]
-    pub pids: Option<Vec<String>>,
+    pub pids: Option<Vec<i32>>,
 
     /// Show stack of all processes of same group (parent process)
     #[arg(long = "parent", conflicts_with = "pids")]
@@ -158,7 +158,7 @@ where
 #[tokio::test]
 async fn test_parse_args() {
     let cli = parse_args(vec!["cs", "--pid", "1000"]);
-    assert_eq!(cli.pids.unwrap().first().unwrap(), "1000");
+    assert_eq!(cli.pids.unwrap().first().unwrap(), &1000);
     assert!(!cli.unique_mode);
     assert!(cli.users.is_none());
     assert!(!cli.gdb_mode);
