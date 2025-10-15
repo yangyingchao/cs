@@ -96,7 +96,16 @@ pub async fn choose_process(cli: &Cli) -> Result<Vec<String>, String> {
                     .collect()
             };
 
-            if let Some(pattern) = cli.pattern.clone() {
+            if let Some(parent) = cli.parent {
+                let r_match_pattern = regex::Regex::new(&format!(" {} ", parent)).unwrap();
+                let r_match_self = regex::Regex::new(&format!(" {} ", std::process::id())).unwrap();
+                let cands: Vec<String> = cands
+                    .into_iter()
+                    .filter(|s| r_match_pattern.is_match(s) && !r_match_self.is_match(s))
+                    .collect();
+
+                Ok(cands.into_iter().map(|s| parse_pid(&s)).collect())
+            } else if let Some(pattern) = cli.pattern.clone() {
                 let r_match_pattern = regex::Regex::new(&pattern).unwrap();
                 let r_match_self = regex::Regex::new(&format!(" {} ", std::process::id())).unwrap();
                 let cands: Vec<String> = cands
@@ -105,7 +114,7 @@ pub async fn choose_process(cli: &Cli) -> Result<Vec<String>, String> {
                     .collect();
 
                 if cands.is_empty() {
-                    eprintln!("No process matches givn patter: {pattern}");
+                    eprintln!("No process matches given patter: {pattern}");
                     std::process::exit(1);
                 }
 

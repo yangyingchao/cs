@@ -27,6 +27,7 @@ Arguments:
 
 Options:
   -p, --pid <PIDS>               Show stack of process PID
+      --parent <PARENT>          Show stack of all processes of same group (parent process)
   -c, --core <CORE>              Show stack found in COREFILE
   -e, --executable <EXECUTABLE>  (optional) EXECUTABLE that produced COREFILE
   -u, --users <USERS>            Show processes of users (separated by ",") when listing/choosing processes
