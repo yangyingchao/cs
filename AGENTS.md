@@ -53,7 +53,7 @@ utils.rs         — process listing (ps), terminal, pager, test helpers
 
 ## Dist build
 
-Cross-compile targets in CI (via `cross`): `aarch64-unknown-linux-musl`, `x86_64-unknown-linux-musl`, `x86_64-apple-darwin`, `aarch64-apple-darwin`.
+Cross-compile targets in CI (via `cross`): `aarch64-unknown-linux-musl`, `x86_64-unknown-linux-musl`, `aarch64-apple-darwin`.
 
 Feature flag: `runtime-agnostic` (empty — marker only).
 
