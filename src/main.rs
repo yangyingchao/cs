@@ -7,7 +7,7 @@ mod uniquify;
 
 use std::process::exit;
 
-use crate::args::parse_args;
+use crate::args::{parse_args, print_chinese_help, ArgsAction};
 use crate::eu_stack::run_eustack;
 use gdb::run_gdb;
 use uniquify::uniquify_stack_files;
@@ -16,7 +16,13 @@ use utils::{choose_process, execute_command, list_process};
 #[tokio::main]
 async fn main() {
     let _ = utils::get_terminal_size(); // must be done before setup pager
-    let mut cli = parse_args(std::env::args());
+    let mut cli = match parse_args(std::env::args()) {
+        ArgsAction::ChineseHelp => {
+            print_chinese_help();
+            return;
+        }
+        ArgsAction::Run(cli) => cli,
+    };
 
     if !cli.gdb_mode {
         if let Ok((code, _out, _err)) = execute_command("which", ["eu-stack"]).await {
