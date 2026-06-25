@@ -3,11 +3,12 @@ mod utils;
 mod args;
 mod eu_stack;
 mod gdb;
+mod stack_data;
 mod uniquify;
 
 use std::process::exit;
 
-use crate::args::{parse_args, print_chinese_help, ArgsAction};
+use crate::args::{parse_args, print_english_help, ArgsAction};
 use crate::eu_stack::run_eustack;
 use gdb::run_gdb;
 use uniquify::uniquify_stack_files;
@@ -17,8 +18,8 @@ use utils::{choose_process, execute_command, list_process};
 async fn main() {
     let _ = utils::get_terminal_size(); // must be done before setup pager
     let mut cli = match parse_args(std::env::args()) {
-        ArgsAction::ChineseHelp => {
-            print_chinese_help();
+        ArgsAction::EnglishHelp => {
+            print_english_help();
             return;
         }
         ArgsAction::Run(cli) => cli,

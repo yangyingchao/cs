@@ -33,8 +33,8 @@ JSON 输出到 stdout，不额外支持文件参数（重定向由 shell 处理�
 ## 数据模型
 
 ```rust
-/// 线程引用：标识一个线程的来源
-pub struct ThreadRef {
+/// 线程标识：标识一个线程的来源
+pub struct ThreadIdent {
     pub pid: i32,
     pub tid: i32,
     pub thread_name: String,
@@ -51,8 +51,8 @@ pub struct Frame {
 }
 
 /// 一组共享相同堆栈帧的线程（非 unique 模式时长度为 1）
-pub struct ThreadStack {
-    pub threads: Vec<ThreadRef>,
+pub struct UniqueStackGroup {
+    pub threads: Vec<ThreadIdent>,
     pub frames: Vec<Frame>,
     pub suspicious: bool,
 }
@@ -61,8 +61,20 @@ pub struct ThreadStack {
 pub struct OutputData {
     pub tool: String,       // "eu-stack" | "gdb"
     pub timestamp: String,
-    pub stacks: Vec<ThreadStack>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sampling: Option<SamplingInfo>,
+    pub stacks: Vec<UniqueStackGroup>,
 }
+```
+
+`SamplingInfo` 在 `-t`/`-n` 多次采样时填充：
+
+```rust
+pub struct SamplingInfo {
+    pub interval: f32,
+    pub count: i32,
+}
+```
 ```
 
 ## 实现策略
@@ -111,5 +123,9 @@ pub struct OutputData {
 ## 不做
 
 - 不出 JSON 到文件（重定向由用户处理）
-- 不修改文本输出的默认行为
+- 不修改堆栈文本输出的默认行为（`--json` 关闭时的输出格式保持不变）
 - 不改变进程选择交互流程（inquire 模式）
+
+## 相关变更
+
+- 随本功能一起重构了帮助系统：clap 属性统一使用中文，`--en --help` 显示独立维护的英文帮助文本。该变更不属于 JSON 输出的核心 scope，但与 `--json` 同批次提交。

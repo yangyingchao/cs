@@ -1,11 +1,11 @@
 use inquire::{MultiSelect, Select};
 use pager::Pager;
-use std::sync::{Arc, Mutex};
 use std::{ffi::OsStr, process::Stdio, sync::OnceLock};
 use termion::terminal_size;
 use tokio::process::Command;
 
 use crate::args::Cli;
+use crate::stack_data::SamplingInfo;
 
 pub async fn execute_command<S, I>(
     command: &str,
@@ -219,35 +219,42 @@ pub fn setup_pager(cli: &Cli) {
     }
 }
 
-pub fn display_result(
-    cli: &Cli,
-    errors: Arc<Mutex<Vec<String>>>,
-    outputs: Arc<Mutex<Vec<String>>>,
-) {
-    if !errors.lock().unwrap().is_empty() {
-        let outputs = outputs.lock().unwrap();
-        if outputs.is_empty() {
+pub fn display_final(cli: &Cli, output: &str, errors: &[String]) {
+    if !errors.is_empty() {
+        if output.is_empty() {
             eprintln!(
                 "error detected on process: {}, no stacks to show...",
-                errors.lock().unwrap().join(",")
+                errors.join(",")
             );
         } else {
             eprintln!(
                 "error detected on process: {}, press ENTER to continue...",
-                errors.lock().unwrap().join(",")
+                errors.join(",")
             );
             use std::io::{stdin, Read};
             let mut stdin_handle = stdin().lock();
             let mut byte = [0_u8];
             stdin_handle.read_exact(&mut byte).unwrap();
             setup_pager(cli);
-            println!("{}", outputs.join("\n"));
+            println!("{output}");
         }
         std::process::exit(2);
     } else {
         setup_pager(cli);
-        println!("{}", outputs.lock().unwrap().join("\n"));
+        println!("{output}");
         std::process::exit(0);
+    }
+}
+
+pub fn get_sampling_info(interval: Option<f32>, count: i32) -> Option<SamplingInfo> {
+    let effective = if interval.is_none() { 1 } else { count };
+    if effective > 1 {
+        Some(SamplingInfo {
+            interval: interval.unwrap(),
+            count: effective,
+        })
+    } else {
+        None
     }
 }
 

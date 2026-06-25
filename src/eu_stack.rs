@@ -1,63 +1,80 @@
-use futures::future::join_all;
+use std::process;
 use std::sync::{Arc, Mutex};
 
-use crate::{
-    args::Cli,
-    uniquify::uniquify_eustack,
-    utils::{display_result, ensure_file_exists, execute_command, setup_pager},
+use futures::future::join_all;
+
+use crate::args::Cli;
+use crate::stack_data::{self, parse_eustack, ThreadStack};
+use crate::utils::{
+    display_final, ensure_file_exists, execute_command, get_sampling_info, setup_pager,
 };
 
 async fn do_run_eustack(
-    args: Vec<String>,
-    unique: bool,
+    args: &[String],
     interval: Option<f32>,
     count: i32,
-) -> Result<String, String> {
-    let mut output = vec![];
-    let mut count = if interval.is_none() { 1 } else { count };
+) -> Result<Vec<ThreadStack>, String> {
+    let mut raw_outputs = vec![];
+    let effective_count = if interval.is_none() { 1 } else { count };
     let sleep = interval.unwrap_or(0.0);
-    let prefix = if count == 1 {
-        "".to_owned()
-    } else {
-        format!("Interval: {sleep}, Count: {count}")
-    };
 
+    let mut remaining = effective_count;
     loop {
-        match execute_command("eu-stack", &args).await {
+        match execute_command("eu-stack", args).await {
             Ok((code, out, err)) => {
                 if code <= 1 {
                     if !err.is_empty() {
                         eprintln!("Warnings reported: {err}");
                     }
-
-                    output.push(out);
+                    raw_outputs.push(out);
                 } else {
                     return Err(err);
                 }
             }
-            Err(err) => {
-                return Err(err.to_string());
-            }
+            Err(err) => return Err(err.to_string()),
         }
-
-        count -= 1;
-        if count == 0 {
+        remaining -= 1;
+        if remaining == 0 {
             break;
         }
-
         tokio::time::sleep(tokio::time::Duration::from_secs_f32(sleep)).await;
     }
 
-    let result = if unique {
-        match uniquify_eustack(&output.join("\n")) {
-            Ok(o) => format!("{prefix}\n{o}"),
-            Err(err) => return Err(err.to_string()),
-        }
+    let mut all_stacks = Vec::new();
+    for raw in &raw_outputs {
+        all_stacks.extend(parse_eustack(raw));
+    }
+    Ok(all_stacks)
+}
+
+fn format_result(
+    all_stacks: Vec<ThreadStack>,
+    cli: &Cli,
+    tool: &str,
+    interval: Option<f32>,
+    count: i32,
+) -> String {
+    let groups = if cli.unique_mode {
+        stack_data::dedup_stacks(all_stacks)
     } else {
-        format!("{}\n{}", prefix, output.join("\n"))
+        stack_data::to_groups(all_stacks)
     };
 
-    Ok(result)
+    if cli.json_mode {
+        let sampling = get_sampling_info(interval, count);
+        stack_data::format_json(&groups, tool, sampling)
+    } else {
+        let prefix = if let Some(sleep) = interval {
+            if count > 1 {
+                format!("Interval: {sleep}, Count: {count}")
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+        stack_data::format_text(&groups, &prefix)
+    }
 }
 
 pub async fn run_eustack(cli: &Cli) {
@@ -70,30 +87,30 @@ pub async fn run_eustack(cli: &Cli) {
             args.push("-e".to_owned());
             ensure_file_exists(executable);
             args.push(executable.to_owned());
-        };
+        }
 
         setup_pager(cli);
-        match do_run_eustack(args, cli.unique_mode, None, 1).await {
-            Ok(result) => {
-                println!("{result}");
-                std::process::exit(0);
+        match do_run_eustack(&args, None, 1).await {
+            Ok(stacks) => {
+                let output = format_result(stacks, cli, "eu-stack", None, 1);
+                println!("{output}");
+                process::exit(0);
             }
             Err(err) => {
                 eprintln!("{err}");
-                std::process::exit(2);
+                process::exit(2);
             }
         }
     }
 
     if let Some(pids) = &cli.pids {
-        let mut handles = vec![];
-        let outputs = Arc::new(Mutex::new(vec![]));
-        let errors = Arc::new(Mutex::new(vec![]));
+        let all_stacks: Arc<Mutex<Vec<ThreadStack>>> = Arc::new(Mutex::new(vec![]));
+        let errors: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(vec![]));
 
-        let unique = cli.unique_mode;
+        let mut handles = vec![];
         for pid in pids.clone() {
-            let output_ref = outputs.clone();
-            let error_ref = errors.clone();
+            let stacks_ref = all_stacks.clone();
+            let err_ref = errors.clone();
             let interval = cli.interval;
             let count = cli.count;
             let frames = cli.frames;
@@ -102,29 +119,32 @@ pub async fn run_eustack(cli: &Cli) {
                     "-n".to_string(),
                     frames.to_string(),
                     "-p".to_string(),
-                    format!("{}", pid),
+                    format!("{pid}"),
                 ];
                 println!(
-                    "Run for process: {:?} in thread: {:?}",
-                    pid,
+                    "Run for process: {pid:?} in thread: {:?}",
                     std::thread::current().id()
                 );
-                match do_run_eustack(args, unique, interval, count).await {
-                    Ok(output) => {
-                        output_ref.lock().unwrap().push(output);
+                match do_run_eustack(&args, interval, count).await {
+                    Ok(stacks) => {
+                        stacks_ref.lock().unwrap().extend(stacks);
                     }
                     Err(err) => {
                         eprintln!("Process {pid} returns error: {err}");
-                        error_ref.lock().unwrap().push(pid.to_string());
+                        err_ref.lock().unwrap().push(pid.to_string());
                     }
                 }
             }));
         }
 
         join_all(handles).await;
-        display_result(cli, errors, outputs);
+
+        let stacks = all_stacks.lock().unwrap().clone();
+        let errors = errors.lock().unwrap().clone();
+        let output = format_result(stacks, cli, "eu-stack", cli.interval, cli.count);
+        display_final(cli, &output, &errors);
     }
 
     eprintln!("Needs pid or core file.");
-    std::process::exit(2);
+    process::exit(2);
 }
