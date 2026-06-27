@@ -1,17 +1,17 @@
 mod utils;
 
 mod args;
-mod eu_stack;
-mod gdb;
+mod input_eustack;
+mod input_file;
+mod input_gdb;
 mod stack_data;
-mod uniquify;
 
 use std::process::exit;
 
 use crate::args::{parse_args, print_english_help, ArgsAction};
-use crate::eu_stack::run_eustack;
-use gdb::run_gdb;
-use uniquify::uniquify_stack_files;
+use crate::input_eustack::run_eustack;
+use crate::input_file::uniquify_stack_files;
+use crate::input_gdb::run_gdb;
 use utils::{choose_process, execute_command, list_process};
 
 #[tokio::main]

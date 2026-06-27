@@ -3,8 +3,10 @@ use std::sync::{Arc, Mutex};
 
 use futures::future::join_all;
 
+use regex::Regex;
+
 use crate::args::Cli;
-use crate::stack_data::{self, parse_eustack, ThreadStack};
+use crate::stack_data::{self, Frame, ThreadStack};
 use crate::utils::{
     display_final, ensure_file_exists, execute_command, get_sampling_info, setup_pager,
 };
@@ -45,6 +47,61 @@ async fn do_run_eustack(
         all_stacks.extend(parse_eustack(raw));
     }
     Ok(all_stacks)
+}
+
+pub fn parse_eustack(input: &str) -> Vec<ThreadStack> {
+    let re_pid = Regex::new(r"PID\s+(?P<pid>\d+)\s+-\s+").unwrap();
+    let re_tid = Regex::new(r"TID\s+(?P<tid>\d+):").unwrap();
+    let re_frame =
+        Regex::new(r"^#(?P<depth>\d+)\s+(?P<addr>0x[0-9a-fA-F]+)\s+(?P<func>.+?)$").unwrap();
+
+    let mut stacks = Vec::new();
+    let mut pid = 0;
+    let mut tid = 0;
+    let mut thread_name = String::new();
+    let mut frames = Vec::new();
+
+    for line in input.lines() {
+        let line = line.trim_end();
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(caps) = re_pid.captures(line) {
+            flush_stack(&mut stacks, pid, tid, &thread_name, &mut frames);
+            pid = caps["pid"].parse().unwrap_or(0);
+        } else if let Some(caps) = re_tid.captures(line) {
+            flush_stack(&mut stacks, pid, tid, &thread_name, &mut frames);
+            tid = caps["tid"].parse().unwrap_or(0);
+            thread_name.clear();
+        } else if let Some(caps) = re_frame.captures(line) {
+            frames.push(Frame {
+                depth: caps["depth"].parse().unwrap_or(0),
+                address: caps["addr"].to_string(),
+                function: caps["func"].to_string(),
+                library: None,
+            });
+        }
+    }
+
+    flush_stack(&mut stacks, pid, tid, &thread_name, &mut frames);
+    stacks
+}
+
+fn flush_stack(
+    stacks: &mut Vec<ThreadStack>,
+    pid: i32,
+    tid: i32,
+    thread_name: &str,
+    frames: &mut Vec<Frame>,
+) {
+    if !frames.is_empty() {
+        stacks.push(ThreadStack {
+            pid,
+            tid,
+            thread_name: thread_name.to_string(),
+            frames: std::mem::take(frames),
+        });
+    }
 }
 
 fn format_result(
@@ -147,4 +204,34 @@ pub async fn run_eustack(cli: &Cli) {
 
     eprintln!("Needs pid or core file.");
     process::exit(2);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_eustack_single_thread() {
+        let input = "PID 1234 - process\n\
+                      TID 1234:\n\
+                      #0  0x7f83df80a3ec func_a\n\
+                      #1  0x7f83df14f421 func_b\n";
+        let stacks = parse_eustack(input);
+        assert_eq!(stacks.len(), 1);
+        assert_eq!(stacks[0].pid, 1234);
+        assert_eq!(stacks[0].tid, 1234);
+        assert_eq!(stacks[0].frames.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_eustack_multi_thread() {
+        let input = "PID 14794 - process\n\
+                      TID 14794:\n\
+                      #0  0x7f83df80a3ec func_a\n\
+                      TID 14818:\n\
+                      #0  0x7f83ddba6fea func_b\n";
+        let stacks = parse_eustack(input);
+        assert_eq!(stacks.len(), 2);
+        assert_eq!(stacks[1].tid, 14818);
+    }
 }
