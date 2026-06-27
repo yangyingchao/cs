@@ -1,5 +1,7 @@
 mod utils;
 
+mod match_mode;
+
 mod args;
 mod input_eustack;
 mod input_file;
@@ -49,6 +51,8 @@ async fn main() {
             }
         }
     }
+
+    cli.warn_if_match_conflict();
 
     if cli.list {
         list_process(cli).await;

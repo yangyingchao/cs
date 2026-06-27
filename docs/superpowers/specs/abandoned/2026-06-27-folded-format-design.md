@@ -98,6 +98,15 @@ g_type_check_instance_is_a;gdk_frame_clock_request_phase 1
 - 不支持自定义分隔符（固定 `;`）
 - 不支持 metadata header
 
+## 放弃
+
+此 spec 已放弃，不实现。原因：
+
+- `cs` 是堆栈快照工具（snapshot），不是 CPU 采样器（profiler），`-t`/`-n` 只能做简陋的周期采样
+- 火焰图的价值在于展示热点分布和回归对比，与 `cs` 的日常使用场景（进程挂死、卡顿、crash 现场分析）偏离
+- 团队实际工作流中不会用到 `cs → folded → flamegraph` 管线
+- 此工具保持纯文本工具定位，不进入可视化生态
+
 ## 相关项目
 
 - [inferno](https://github.com/jonhoo/inferno) — Rust 实现的 FlameGraph 工具集

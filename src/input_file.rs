@@ -68,7 +68,7 @@ pub async fn uniquify_stack_files(cli: Cli) {
     }
 
     let groups = if cli.unique_mode {
-        stack_data::dedup_stacks(stacks)
+        stack_data::dedup_stacks(stacks, cli.effective_match_mode())
     } else {
         stack_data::to_groups(stacks)
     };

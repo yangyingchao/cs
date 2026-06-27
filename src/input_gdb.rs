@@ -128,7 +128,7 @@ fn format_result(
     count: i32,
 ) -> String {
     let groups = if cli.unique_mode {
-        stack_data::dedup_stacks(all_stacks)
+        stack_data::dedup_stacks(all_stacks, cli.effective_match_mode())
     } else {
         stack_data::to_groups(all_stacks)
     };
@@ -214,6 +214,7 @@ pub async fn run_gdb(cli: &Cli) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::match_mode::MatchMode;
     use crate::stack_data;
 
     #[test]
@@ -272,7 +273,7 @@ Thread 2 (Thread 0x7f29ce816740 (LWP 37748) "test"):
 "#;
         let stacks = parse_gdb(input, true);
         assert_eq!(stacks.len(), 2);
-        let groups = stack_data::dedup_stacks(stacks);
+        let groups = stack_data::dedup_stacks(stacks, MatchMode::Precise);
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].threads.len(), 2);
         assert_eq!(groups[0].frames.len(), 5);

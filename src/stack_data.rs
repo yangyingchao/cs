@@ -4,6 +4,8 @@ use colored::*;
 use regex::Regex;
 use serde::Serialize;
 
+use crate::match_mode::{MatchMode, StackKey};
+
 // ---- Data Model ----
 
 #[derive(Debug, Clone, Serialize, Hash, Eq, PartialEq)]
@@ -85,12 +87,13 @@ pub use crate::input_gdb::parse_gdb;
 
 // ---- Dedup ----
 
-pub fn dedup_stacks(stacks: Vec<ThreadStack>) -> Vec<UniqueStackGroup> {
-    let mut groups: HashMap<Vec<Frame>, UniqueStackGroup> = HashMap::new();
+pub fn dedup_stacks(stacks: Vec<ThreadStack>, mode: MatchMode) -> Vec<UniqueStackGroup> {
+    let mut groups: HashMap<StackKey, UniqueStackGroup> = HashMap::new();
 
     for stack in stacks {
+        let key = mode.build_key(&stack.frames);
         let entry = groups
-            .entry(stack.frames.clone())
+            .entry(key)
             .or_insert_with(|| UniqueStackGroup {
                 threads: Vec::new(),
                 frames: stack.frames.clone(),
@@ -226,7 +229,7 @@ mod tests {
             make_stack(1, 100, vec![f.clone()]),
             make_stack(1, 101, vec![f]),
         ];
-        let groups = dedup_stacks(stacks);
+        let groups = dedup_stacks(stacks, MatchMode::Precise);
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].threads.len(), 2);
     }
@@ -246,7 +249,7 @@ mod tests {
             make_stack(100, 1000, vec![f.clone()]),
             make_stack(200, 2000, vec![f]),
         ];
-        let groups = dedup_stacks(stacks);
+        let groups = dedup_stacks(stacks, MatchMode::Precise);
         assert_eq!(groups.len(), 1);
         assert_eq!(groups[0].threads.len(), 2);
         assert!(groups[0]
@@ -257,5 +260,21 @@ mod tests {
             .threads
             .iter()
             .any(|t| t.pid == 200 && t.tid == 2000));
+    }
+
+    #[test]
+    fn test_dedup_fuzzy_ignores_address() {
+        let f1 = make_frame(0, "0xaaa", "func_a");
+        let f2 = make_frame(0, "0xbbb", "func_a");
+        let stacks = vec![
+            make_stack(1, 100, vec![f1]),
+            make_stack(1, 101, vec![f2]),
+        ];
+        let fuzzy_groups = dedup_stacks(stacks.clone(), MatchMode::Fuzzy);
+        assert_eq!(fuzzy_groups.len(), 1);
+        assert_eq!(fuzzy_groups[0].threads.len(), 2);
+
+        let precise_groups = dedup_stacks(stacks, MatchMode::Precise);
+        assert_eq!(precise_groups.len(), 2);
     }
 }

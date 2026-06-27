@@ -2,6 +2,8 @@ use std::process::exit;
 
 use clap::Parser;
 
+use crate::match_mode::MatchMode;
+
 #[derive(Parser, Clone)]
 #[command(
     long_about = None,
@@ -104,6 +106,10 @@ pub struct Cli {
     #[arg(long = "json", default_value_t = false)]
     pub json_mode: bool,
 
+    /// 堆栈匹配模式：precise（精确）或 fuzzy（模糊），默认 auto
+    #[arg(long = "match", value_enum)]
+    pub match_mode: Option<MatchMode>,
+
     /// 读取调用栈的文件，使用 "-" 表示标准输入；多个文件会被合并
     #[clap(allow_hyphen_values=true, num_args=0..,)]
     pub files: Vec<String>,
@@ -132,6 +138,41 @@ impl Cli {
             pattern: None,
             english_mode: false,
             json_mode: false,
+            match_mode: None,
+        }
+    }
+
+    pub fn effective_match_mode(&self) -> MatchMode {
+        if let Some(mode) = self.match_mode {
+            return mode;
+        }
+        if self.is_multi_source() {
+            MatchMode::Fuzzy
+        } else {
+            MatchMode::Precise
+        }
+    }
+
+    fn is_multi_source(&self) -> bool {
+        !self.files.is_empty()
+            || self.parent.is_some()
+            || self.pattern.is_some()
+            || self.pids.as_ref().is_some_and(|p| p.len() > 1)
+    }
+
+    pub fn warn_if_match_conflict(&self) {
+        if self.match_mode.is_some() && !self.unique_mode {
+            eprintln!(
+                "warning: --match has no effect without --unique (-U).\n\
+                 Use -U to enable stack dedup."
+            );
+        }
+        if self.match_mode == Some(MatchMode::Precise) && self.is_multi_source() {
+            eprintln!(
+                "warning: --match precise with multiple input sources may cause\n\
+                 identical stacks to appear different due to ASLR.\n\
+                 Consider using --match fuzzy (or omit --match for auto)."
+            );
         }
     }
 }
@@ -175,6 +216,7 @@ Options:
   -P, --pattern <PATTERN>        Show call stacks of processes whose name matches PATTERN
       --en                       Show English help (requires --help or -h)
       --json                     JSON output format
+      --match <MATCH_MODE>       Stack matching mode: precise or fuzzy (default auto)
   -h, --help                     Print help
   -V, --version                  Print version
 
@@ -338,6 +380,49 @@ fn test_en_help_action() {
         parse_args(vec!["cs", "--en", "--help"]),
         ArgsAction::EnglishHelp
     ));
+}
+
+#[test]
+fn test_match_mode_default_precise() {
+    let cli = Cli {
+        files: vec![],
+        pids: None,
+        parent: None,
+        pattern: None,
+        match_mode: None,
+        ..Cli::default()
+    };
+    assert_eq!(cli.effective_match_mode(), MatchMode::Precise);
+}
+
+#[test]
+fn test_match_mode_files_implies_fuzzy() {
+    let cli = Cli {
+        files: vec!["file.stack".into()],
+        match_mode: None,
+        ..Cli::default()
+    };
+    assert_eq!(cli.effective_match_mode(), MatchMode::Fuzzy);
+}
+
+#[test]
+fn test_match_mode_multi_pid_implies_fuzzy() {
+    let cli = Cli {
+        pids: Some(vec![100, 101]),
+        match_mode: None,
+        ..Cli::default()
+    };
+    assert_eq!(cli.effective_match_mode(), MatchMode::Fuzzy);
+}
+
+#[test]
+fn test_match_mode_explicit_override() {
+    let cli = Cli {
+        files: vec!["f.stack".into()],
+        match_mode: Some(MatchMode::Precise),
+        ..Cli::default()
+    };
+    assert_eq!(cli.effective_match_mode(), MatchMode::Precise);
 }
 
 #[cfg(test)]

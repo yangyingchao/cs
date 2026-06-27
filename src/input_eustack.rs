@@ -112,7 +112,7 @@ fn format_result(
     count: i32,
 ) -> String {
     let groups = if cli.unique_mode {
-        stack_data::dedup_stacks(all_stacks)
+        stack_data::dedup_stacks(all_stacks, cli.effective_match_mode())
     } else {
         stack_data::to_groups(all_stacks)
     };
