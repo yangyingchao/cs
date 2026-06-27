@@ -3,6 +3,7 @@ mod utils;
 mod match_mode;
 
 mod args;
+mod diff;
 mod input_eustack;
 mod input_file;
 mod input_gdb;
@@ -11,6 +12,7 @@ mod stack_data;
 use std::process::exit;
 
 use crate::args::{parse_args, print_english_help, ArgsAction};
+use crate::diff::{run_diff, run_diff_live};
 use crate::input_eustack::run_eustack;
 use crate::input_file::uniquify_stack_files;
 use crate::input_gdb::run_gdb;
@@ -36,7 +38,13 @@ async fn main() {
         }
     }
 
-    if !cli.list && cli.files.is_empty() && cli.pids.is_none() && cli.core.is_none() {
+    if !cli.list
+        && !cli.diff_live
+        && cli.diff.is_none()
+        && cli.files.is_empty()
+        && cli.pids.is_none()
+        && cli.core.is_none()
+    {
         match choose_process(&cli).await {
             Ok(pids) => {
                 if pids.is_empty() {
@@ -56,6 +64,12 @@ async fn main() {
 
     if cli.list {
         list_process(cli).await;
+    } else if cli.diff_live {
+        run_diff_live(&cli).await;
+    } else if let Some(diff_files) = &cli.diff {
+        let before = &diff_files[0];
+        let after = &diff_files[1];
+        run_diff(before, after, &cli).await;
     } else if !cli.files.is_empty() {
         uniquify_stack_files(cli).await;
     } else if cli.gdb_mode {

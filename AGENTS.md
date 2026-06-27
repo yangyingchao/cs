@@ -51,6 +51,23 @@ utils.rs         — process listing (ps), terminal, pager, test helpers
 - Stdin input: pass `-` as a positional arg
 - Pager auto-enabled unless `-N` or `TERM=dumb`
 
+## Help 输出
+
+clap 中 `-h` 使用短帮助（紧凑，一行一个选项），`--help` 使用长帮助（每个选项的
+名称和描述分两行显示）。这是 clap 内置行为，`help_template` 和 `next_line_help`
+无法改变。
+
+如果某个选项的 `--help` 描述太长，将 `///` doc comment 拆成多行，并配合
+`verbatim_doc_comment` 属性保留换行：
+
+```rust
+/// 仅采样两次（before + after）并输出 diff。
+/// 配合 -t 可指定间隔秒数，不带 -t 则等待按回车触发第二次。
+#[arg(long = "diff-live", ..., verbatim_doc_comment)]
+```
+
+当前版本使用 `help_template` 自定义了格式，但选项级别仍为长格式。
+
 ## Dist build
 
 Cross-compile targets in CI (via `cross`): `aarch64-unknown-linux-musl`, `x86_64-unknown-linux-musl`, `aarch64-apple-darwin`.

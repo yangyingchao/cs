@@ -11,16 +11,20 @@ use crate::match_mode::MatchMode;
     arg_required_else_help = true,
     version,
     trailing_var_arg = true,
-    after_help = r"使用示例:
-  - `cs --help`:                显示本帮助信息
-  - `cs --en --help`:           显示英文帮助信息
-  - `cs`:                       交互式选择进程并显示调用栈
-  - `cs -l -u user`:            显示指定用户的进程
-  - `cs -p 905 -U`:             显示进程 905 的去重调用栈
-  - `cs --parent 105 -U`:       显示父进程 105 的所有子进程的去重调用栈
-  - `cs -U -P google.chrome`:   显示所有 google chrome 进程的去重调用栈
-  - `cs -U -p 905 -t 0.5 -n 3`: 采样进程 905 的调用栈 3 次（间隔 0.5 秒），然后去重输出
-")]
+    after_help = r#"基本示例:
+  - `cs --help`:                        显示本帮助信息
+  - `cs`:                               交互式选择进程并显示调用栈
+  - `cs -p 905`:                        显示进程 905 的调用栈
+  - `cs -p 905 -U`:                     显示进程 905 的去重调用栈
+  - `cs -U -P google.chrome`:           显示所有 Chrome 进程的去重调用栈
+
+进阶示例:
+  - `cs -U -p 905 -t 0.5 -n 3`:         进程 905 采样 3 次（间隔 0.5 秒），去重输出
+  - `cs -p 905 --json > snap.json`:     保存进程 905 的快照为 JSON
+  - `cs --diff before.json after.json`:	对比两个 JSON 快照文件
+  - `cs --diff-live -p 905 -t 2`:       直接采样两次（间隔 2 秒）并输出 diff
+  - `cs --diff-live -p 905`:            按回车触发第二次采样，输出 diff
+"#)]
 pub struct Cli {
     /// 显示指定 PID 进程的调用栈
     #[arg(short = 'p', long = "pid")]
@@ -106,9 +110,23 @@ pub struct Cli {
     #[arg(long = "json", default_value_t = false)]
     pub json_mode: bool,
 
-    /// 堆栈匹配模式：precise（精确）或 fuzzy（模糊），默认 auto
+    /// 堆栈匹配模式：默认 auto,
     #[arg(long = "match", value_enum)]
     pub match_mode: Option<MatchMode>,
+
+    /// 对比两个 JSON 格式的堆栈快照文件
+    #[arg(long = "diff", num_args = 2, value_names = ["BEFORE", "AFTER"])]
+    pub diff: Option<Vec<String>>,
+
+    /// 仅采样两次（before + after）并输出 diff。
+    /// 配合 -t 可指定间隔秒数，不带 -t 则等待按回车触发第二次。
+    #[arg(
+        long = "diff-live",
+        conflicts_with = "diff",
+        conflicts_with = "count",
+        verbatim_doc_comment
+    )]
+    pub diff_live: bool,
 
     /// 读取调用栈的文件，使用 "-" 表示标准输入；多个文件会被合并
     #[clap(allow_hyphen_values=true, num_args=0..,)]
@@ -138,6 +156,8 @@ impl Cli {
             pattern: None,
             english_mode: false,
             json_mode: false,
+            diff: None,
+            diff_live: false,
             match_mode: None,
         }
     }
@@ -146,7 +166,7 @@ impl Cli {
         if let Some(mode) = self.match_mode {
             return mode;
         }
-        if self.is_multi_source() {
+        if self.diff.is_some() || self.diff_live || self.is_multi_source() {
             MatchMode::Fuzzy
         } else {
             MatchMode::Precise
@@ -154,14 +174,17 @@ impl Cli {
     }
 
     fn is_multi_source(&self) -> bool {
-        !self.files.is_empty()
+        self.diff.is_some()
+            || self.diff_live
+            || !self.files.is_empty()
             || self.parent.is_some()
             || self.pattern.is_some()
             || self.pids.as_ref().is_some_and(|p| p.len() > 1)
     }
 
     pub fn warn_if_match_conflict(&self) {
-        if self.match_mode.is_some() && !self.unique_mode {
+        if self.match_mode.is_some() && !self.unique_mode && self.diff.is_none() && !self.diff_live
+        {
             eprintln!(
                 "warning: --match has no effect without --unique (-U).\n\
                  Use -U to enable stack dedup."
@@ -191,44 +214,51 @@ fn english_help_text() -> &'static str {
 Usage: cs [OPTIONS] [FILES]...
 
 Arguments:
-  [FILES]...      files to read stack from, use "-" for stdin; multiple files will be merged together
+  [FILES]...      files to read stack from ("-" for stdin); multiple files will be merged
 
 Options:
   -p, --pid <PIDS>               Show stack of process PID
-      --parent <PARENT>          Show stack of all processes of same group (parent process)
+      --parent <PARENT>          Show stack of all child processes of PARENT
   -c, --core <COREFILE>          Show stack found in COREFILE
-  -e, --executable <EXECUTABLE>  (optional) EXECUTABLE that produced COREFILE
-  -u, --users <USERS>            Show processes of users (separated by ",") when listing/choosing processes
+  -e, --executable <EXECUTABLE>  EXECUTABLE that produced COREFILE (optional)
+  -u, --users <USERS>            Filter processes by user list (comma-separated)
   -i, --initial <INITIAL>        Initial value to filter process
   -l, --list                     List processes
-  -t, --interval <INTERVAL>      Specify update interval as seconds, it should not be quicker than 0.1.
-                                 Applies only when getting callstack from running app.
-  -n, --count <COUNT>            Specify number of sampling.
-                                 Applies only when getting callstack from running app, and `interval`
-                                 is specified. [default: 1]
-  -f, --frames <FRAMES>          Specify number of frames when getting call stack, 0 means unlimited [default: 2048]
-  -W, --Wide                     Wide mode: when showing processes, show all chars in a line
-  -M, --multi                    Multi mode: when choosing processes, to select multiple processes
-  -U, --unique                   Unique mode: when showing call stack, show only unique ones
-  -G, --gdb                      gdb mode: use gdb to get call stack (default to eu-stack)
-  -R, --raw                      Raw mode: do not try to simplify callstacks (works with `-G` only)
+  -t, --interval <INTERVAL>      Sampling interval in seconds (min: 0.1).
+                                 Applies only when sampling a running process.
+  -n, --count <COUNT>            Number of samples to take.
+                                 Applies only when sampling a running process with `-t`.
+                                 [default: 1]
+  -f, --frames <FRAMES>          Frame count to show (0 = unlimited) [default: 2048]
+  -W, --Wide                     Wide mode: show full line in process list
+  -M, --multi                    Multi mode: allow selecting multiple processes
+  -U, --unique                   Unique mode: deduplicate identical stacks
+  -G, --gdb                      Use gdb instead of eu-stack
+  -R, --raw                      Raw mode: skip stack simplification (works with `-G` only)
   -N, --no-pager                 Disable pager
-  -P, --pattern <PATTERN>        Show call stacks of processes whose name matches PATTERN
+  -P, --pattern <PATTERN>        Filter processes by name PATTERN
       --en                       Show English help (requires --help or -h)
+      --diff <BEFORE> <AFTER>    Diff two JSON stack snapshot files
+      --diff-live                Live diff: sample twice, show diff
       --json                     JSON output format
-      --match <MATCH_MODE>       Stack matching mode: precise or fuzzy (default auto)
+      --match <MATCH_MODE>       Stack matching: precise or fuzzy (default: auto)
   -h, --help                     Print help
   -V, --version                  Print version
 
-Usages Examples:
-  - `cs --help`:                Show Chinese help (default)
-  - `cs --en --help`:           Show English help
-  - `cs`:                       Choose process interactive and show's its call stack.
-  - `cs -l -u user`:            Show processes of USER.
-  - `cs -p 905 -U`:             Show uniue stack for process `905`.
-  - `cs --parent 105 -U`:       Show uniue stack for all processes whose parent is `105` beside `105` itself.
-  - `cs -U -P google.chrome`:   Show unique stack of all processes of google chrome
-  - `cs -U -p 905 -t 0.5 -n 3`: Get callstack for PID 905 for 3 times with interval 0.5 seconds, then uniquify the output.
+Basic Usage:
+  - `cs --help`:                        Show Chinese help (default)
+  - `cs`:                               Choose process and show its call stack.
+  - `cs -p 905`:                        Show stack of process 905.
+  - `cs -p 905 -U`:                     Show unique stack for process 905.
+  - `cs -l -u user`:                    Show processes of USER.
+  - `cs -U -P google.chrome`:           Unique stacks of all Chrome processes.
+
+Advanced Usage:
+  - `cs -U -p 905 -t 0.5 -n 3`:         Sample 905 3 times (0.5s apart), uniquify.
+  - `cs -p 905 --json > snap.json`:     Save stack snapshot as JSON.
+  - `cs --diff before.json after.json`:	Diff two JSON snapshot files.
+  - `cs --diff-live -p 905 -t 2`:       Sample twice (2s interval), show diff.
+  - `cs --diff-live -p 905`:            Press ENTER for second sample, show diff.
 "#
 }
 
@@ -358,7 +388,7 @@ fn test_english_help_contains_key_phrases() {
     assert!(text.contains("Usage"));
     assert!(text.contains("--pid"));
     assert!(text.contains("--en"));
-    assert!(text.contains("Examples"));
+    assert!(text.contains("Basic Usage"));
 }
 
 #[test]

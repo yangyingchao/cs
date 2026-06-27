@@ -2,13 +2,13 @@ use std::collections::HashMap;
 
 use colored::*;
 use regex::Regex;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::match_mode::{MatchMode, StackKey};
 
 // ---- Data Model ----
 
-#[derive(Debug, Clone, Serialize, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub struct Frame {
     pub depth: u32,
     pub address: String,
@@ -17,7 +17,7 @@ pub struct Frame {
     pub library: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThreadIdent {
     pub pid: i32,
     pub tid: i32,
@@ -32,20 +32,20 @@ pub struct ThreadStack {
     pub frames: Vec<Frame>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UniqueStackGroup {
     pub threads: Vec<ThreadIdent>,
     pub frames: Vec<Frame>,
     pub suspicious: bool,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SamplingInfo {
     pub interval: f32,
     pub count: i32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OutputData {
     pub tool: String,
     pub timestamp: String,
@@ -92,13 +92,11 @@ pub fn dedup_stacks(stacks: Vec<ThreadStack>, mode: MatchMode) -> Vec<UniqueStac
 
     for stack in stacks {
         let key = mode.build_key(&stack.frames);
-        let entry = groups
-            .entry(key)
-            .or_insert_with(|| UniqueStackGroup {
-                threads: Vec::new(),
-                frames: stack.frames.clone(),
-                suspicious: any_frame_suspicious(&stack.frames),
-            });
+        let entry = groups.entry(key).or_insert_with(|| UniqueStackGroup {
+            threads: Vec::new(),
+            frames: stack.frames.clone(),
+            suspicious: any_frame_suspicious(&stack.frames),
+        });
         entry.threads.push(ThreadIdent {
             pid: stack.pid,
             tid: stack.tid,
@@ -266,10 +264,7 @@ mod tests {
     fn test_dedup_fuzzy_ignores_address() {
         let f1 = make_frame(0, "0xaaa", "func_a");
         let f2 = make_frame(0, "0xbbb", "func_a");
-        let stacks = vec![
-            make_stack(1, 100, vec![f1]),
-            make_stack(1, 101, vec![f2]),
-        ];
+        let stacks = vec![make_stack(1, 100, vec![f1]), make_stack(1, 101, vec![f2])];
         let fuzzy_groups = dedup_stacks(stacks.clone(), MatchMode::Fuzzy);
         assert_eq!(fuzzy_groups.len(), 1);
         assert_eq!(fuzzy_groups[0].threads.len(), 2);
