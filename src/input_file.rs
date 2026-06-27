@@ -51,46 +51,46 @@ pub async fn uniquify_stack_files(cli: Cli) {
 
     let has_json_ext = cli.files.iter().any(|f| f.ends_with(".json"));
 
-    let groups: Vec<UniqueStackGroup> =
-
-        if let Ok(data) = serde_json::from_str::<OutputData>(&content) {
-            data.stacks
-        } else {
-            if has_json_ext {
-                eprintln!("warning: input has .json extension but is not valid JSON, falling back to text parsing");
+    let groups: Vec<UniqueStackGroup> = if let Ok(data) =
+        serde_json::from_str::<OutputData>(&content)
+    {
+        data.stacks
+    } else {
+        if has_json_ext {
+            eprintln!("warning: input has .json extension but is not valid JSON, falling back to text parsing");
+        }
+        if cli.raw_mode {
+            let stacks: Vec<ThreadStack> = parse_eustack(&content)
+                .into_iter()
+                .chain(parse_gdb(&content, false))
+                .collect();
+            if stacks.is_empty() {
+                eprintln!("Failed to parse stack content.");
+                process::exit(2);
             }
-            if cli.raw_mode {
-                let stacks: Vec<ThreadStack> = parse_eustack(&content)
-                    .into_iter()
-                    .chain(parse_gdb(&content, false))
-                    .collect();
-                if stacks.is_empty() {
-                    eprintln!("Failed to parse stack content.");
-                    process::exit(2);
-                }
-                if cli.unique_mode {
-                    stack_data::dedup_stacks(stacks, cli.effective_match_mode())
-                } else {
-                    stack_data::to_groups(stacks)
-                }
+            if cli.unique_mode {
+                stack_data::dedup_stacks(stacks, cli.effective_match_mode())
             } else {
-                let stacks = parse_eustack(&content);
-                let stacks = if !stacks.is_empty() {
-                    stacks
-                } else {
-                    parse_gdb(&content, true)
-                };
-                if stacks.is_empty() {
-                    eprintln!("Failed to parse stack content.");
-                    process::exit(2);
-                }
-                if cli.unique_mode {
-                    stack_data::dedup_stacks(stacks, cli.effective_match_mode())
-                } else {
-                    stack_data::to_groups(stacks)
-                }
+                stack_data::to_groups(stacks)
             }
-        };
+        } else {
+            let stacks = parse_eustack(&content);
+            let stacks = if !stacks.is_empty() {
+                stacks
+            } else {
+                parse_gdb(&content, true)
+            };
+            if stacks.is_empty() {
+                eprintln!("Failed to parse stack content.");
+                process::exit(2);
+            }
+            if cli.unique_mode {
+                stack_data::dedup_stacks(stacks, cli.effective_match_mode())
+            } else {
+                stack_data::to_groups(stacks)
+            }
+        }
+    };
 
     if cli.json_mode {
         println!("{}", stack_data::format_json(&groups, "unknown", None));
