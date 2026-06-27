@@ -60,18 +60,35 @@ pub async fn collect_samples(
 - 不动错误处理策略（不引入 anyhow/thiserror）
 - 不改动现有 API 签名
 - 不重构模块边界
+- `display_final()` 中的同步 stdin 阻塞不在本次修复范围内（出错后即 exit，实际影响有限）
+
+## 实施后补充
+
+### 正则缓存范围
+
+实际实现覆盖了以下所有热路径：
+- `stack_data.rs`: `is_suspicious()` + `format_text()`（如 spec）
+- `input_eustack.rs`: `parse_eustack()` — 3 个 Regex
+- `input_gdb.rs`: `parse_gdb()` — 6 个 Regex
+- `utils.rs`: `parse_pid()` — 1 个 Regex
+
+动态拼接的 Regex（如 `choose_process` 中的用户输入、PID 过滤）未纳入缓存。
+
+### SUSPICIOUS_KEYWORDS 转义
+
+关键字 `fatal.*signals` 有意使用 `.*` 作为正则片段，不应 `regex::escape`。使用方需约定该数组为合法正则片段。当前已通过 `LazyLock` 缓存，行为不变。
 
 ## 影响范围
 
-| 文件             | 改动                                  |
-| ---------------- | ------------------------------------- |
-| `Cargo.toml`       | 移除 glob                             |
-| `stack_data.rs`    | LazyLock 缓存正则                     |
-| `utils.rs`         | 新增 `collect_samples()`                |
-| `input_eustack.rs` | `do_run_eustack` 改调用 `collect_samples` |
-| `input_gdb.rs`     | `do_run_gdb` 改调用 `collect_samples`     |
-| `input_file.rs`    | 改用 `tokio::io::stdin`，新增测试       |
-| `main.rs`          | 新增测试                              |
+| 文件             | 改动                                                    |
+| ---------------- | ------------------------------------------------------- |
+| `Cargo.toml`       | 移除 glob                                               |
+| `stack_data.rs`    | LazyLock 缓存正则                                       |
+| `utils.rs`         | 新增 `collect_samples()` + 测试 + `ensure_file_exists` 测试 |
+| `input_eustack.rs` | `do_run_eustack` 改调用 `collect_samples`，正则缓存         |
+| `input_gdb.rs`     | `do_run_gdb` 改调用 `collect_samples`，正则缓存             |
+| `input_file.rs`    | 改用 `tokio::io::stdin`                                   |
+| `args.rs`          | 新增 match mode diff/diff-live 测试                     |
 
 ## 验证
 

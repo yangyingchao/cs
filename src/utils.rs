@@ -1,5 +1,6 @@
 use inquire::{MultiSelect, Select};
 use pager::Pager;
+use std::sync::LazyLock;
 use std::{ffi::OsStr, process::Stdio, sync::OnceLock};
 use termion::terminal_size;
 use tokio::process::Command;
@@ -29,9 +30,42 @@ where
     Ok((exit_code, stdout, stderr))
 }
 
+pub async fn collect_samples(
+    command: &str,
+    args: &[String],
+    interval: Option<f32>,
+    count: i32,
+) -> Result<Vec<String>, String> {
+    let effective_count = if interval.is_none() { 1 } else { count };
+    let sleep = interval.unwrap_or(0.0);
+    let mut raw_outputs = Vec::new();
+
+    for i in 0..effective_count {
+        match execute_command(command, args).await {
+            Ok((code, out, err)) => {
+                if code <= 1 {
+                    if !err.is_empty() {
+                        eprintln!("Warnings reported: {err}");
+                    }
+                    raw_outputs.push(out);
+                } else {
+                    return Err(err);
+                }
+            }
+            Err(err) => return Err(err.to_string()),
+        }
+        if i < effective_count - 1 {
+            tokio::time::sleep(tokio::time::Duration::from_secs_f32(sleep)).await;
+        }
+    }
+    Ok(raw_outputs)
+}
+
+static RE_PARSE_PID: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r#"\s*(?P<pid>\d+)\s+"#).unwrap());
+
 fn parse_pid(s: &str) -> i32 {
-    let r_match_pid = regex::Regex::new(r#"\s*(?P<pid>\d+)\s+"#).unwrap();
-    let m = r_match_pid.captures(s).expect("capture fails");
+    let m = RE_PARSE_PID.captures(s).expect("capture fails");
     m.name("pid").unwrap().as_str().parse::<i32>().unwrap()
 }
 
@@ -309,4 +343,27 @@ async fn test_parse_and_get_pid() {
 
     let s = terminal_size();
     println!("S: {s:?}");
+}
+
+#[tokio::test]
+async fn test_collect_samples() {
+    let result = collect_samples("echo", &["hello".into()], None, 1).await;
+    assert!(result.is_ok());
+    let outputs = result.unwrap();
+    assert_eq!(outputs.len(), 1);
+    assert!(outputs[0].contains("hello"));
+}
+
+#[test]
+fn test_ensure_file_exists() {
+    let path = std::env::temp_dir().join("_cs_test_ensure_exists");
+    std::fs::write(&path, "test").unwrap();
+    ensure_file_exists(path.to_str().unwrap());
+    std::fs::remove_file(&path).unwrap();
+}
+
+#[test]
+#[should_panic(expected = "does not exist")]
+fn test_ensure_file_exists_missing() {
+    ensure_file_exists("/tmp/_cs_test_file_does_not_exist_12345");
 }

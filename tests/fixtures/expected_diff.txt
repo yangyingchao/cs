@@ -1,0 +1,14 @@
+=== Stack Diff ===
+
+[+] added: 1
+    #0  0x7f000006 func_f
+    (1 thread)
+
+[-] removed: 1
+    #0  0x7f000005 func_e
+    (1 thread)
+
+[~] changed: 1
+    #0  0x7f000003 func_c
+    #1  0x7f000004 func_d
+    before: 3 threads  after: 1 thread

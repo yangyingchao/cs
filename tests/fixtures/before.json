@@ -1,0 +1,38 @@
+{
+  "tool": "cs",
+  "timestamp": "2026-06-27T00:00:00Z",
+  "stacks": [
+    {
+      "threads": [
+        { "pid": 100, "tid": 101, "thread_name": "" },
+        { "pid": 100, "tid": 102, "thread_name": "" }
+      ],
+      "frames": [
+        { "depth": 0, "address": "0x7f000001", "function": "func_a", "library": "liba.so" },
+        { "depth": 1, "address": "0x7f000002", "function": "func_b", "library": "liba.so" }
+      ],
+      "suspicious": false
+    },
+    {
+      "threads": [
+        { "pid": 100, "tid": 103, "thread_name": "" },
+        { "pid": 100, "tid": 104, "thread_name": "" },
+        { "pid": 100, "tid": 105, "thread_name": "" }
+      ],
+      "frames": [
+        { "depth": 0, "address": "0x7f000003", "function": "func_c", "library": "libb.so" },
+        { "depth": 1, "address": "0x7f000004", "function": "func_d", "library": "libb.so" }
+      ],
+      "suspicious": false
+    },
+    {
+      "threads": [
+        { "pid": 100, "tid": 106, "thread_name": "" }
+      ],
+      "frames": [
+        { "depth": 0, "address": "0x7f000005", "function": "func_e", "library": "libc.so" }
+      ],
+      "suspicious": false
+    }
+  ]
+}

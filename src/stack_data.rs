@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 use colored::*;
 use regex::Regex;
@@ -72,10 +73,23 @@ static SUSPICIOUS_KEYWORDS: &[&str] = &[
     "signal handler called",
 ];
 
+fn suspicious_pattern() -> String {
+    format!("(?i)({})", SUSPICIOUS_KEYWORDS.join("|"))
+}
+
+static RE_SUSPICIOUS: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(&suspicious_pattern()).unwrap());
+
+static RE_SUSPICIOUS_HIGHLIGHT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(&format!(
+        r#"(?i)(?P<sus>.*({}).*)"#,
+        SUSPICIOUS_KEYWORDS.join("|")
+    ))
+    .unwrap()
+});
+
 fn is_suspicious(function: &str) -> bool {
-    let pattern = format!("(?i)({})", SUSPICIOUS_KEYWORDS.join("|"));
-    let re = Regex::new(&pattern).unwrap();
-    re.is_match(function)
+    RE_SUSPICIOUS.is_match(function)
 }
 
 fn any_frame_suspicious(frames: &[Frame]) -> bool {
@@ -130,9 +144,7 @@ pub fn format_text(groups: &[UniqueStackGroup], sampling_prefix: &str) -> String
     let mut outputs = Vec::new();
     let mut all_suspicious = Vec::new();
 
-    let keywords = SUSPICIOUS_KEYWORDS;
-    let pattern = format!(r#"(?i)(?P<sus>.*({}).*)"#, keywords.join("|"));
-    let r_match = Regex::new(&pattern).unwrap();
+    let r_match = &RE_SUSPICIOUS_HIGHLIGHT;
 
     for group in groups {
         let tids_str = group

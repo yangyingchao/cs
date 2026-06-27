@@ -455,6 +455,38 @@ fn test_match_mode_explicit_override() {
     assert_eq!(cli.effective_match_mode(), MatchMode::Precise);
 }
 
+#[test]
+fn test_match_mode_diff_implies_fuzzy() {
+    let cli = Cli {
+        diff: Some(vec!["a.json".into(), "b.json".into()]),
+        match_mode: None,
+        ..Cli::default()
+    };
+    assert_eq!(cli.effective_match_mode(), MatchMode::Fuzzy);
+}
+
+#[test]
+fn test_match_mode_diff_live_implies_fuzzy() {
+    let cli = Cli {
+        diff_live: true,
+        match_mode: None,
+        ..Cli::default()
+    };
+    assert_eq!(cli.effective_match_mode(), MatchMode::Fuzzy);
+}
+
+#[test]
+fn test_match_mode_diff_can_override_to_precise() {
+    let cli = Cli {
+        diff: Some(vec!["a.json".into(), "b.json".into()]),
+        match_mode: Some(MatchMode::Precise),
+        ..Cli::default()
+    };
+    assert_eq!(cli.effective_match_mode(), MatchMode::Precise);
+    // precise with multi-source should trigger warning
+    cli.warn_if_match_conflict();
+}
+
 #[cfg(test)]
 fn run_cs(args: &[&str]) -> std::process::Output {
     let mut cmd = std::process::Command::new("cargo");

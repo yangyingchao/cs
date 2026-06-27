@@ -1,4 +1,5 @@
 use std::process;
+use std::sync::LazyLock;
 use std::sync::{Arc, Mutex};
 
 use futures::future::join_all;
@@ -8,7 +9,7 @@ use regex::Regex;
 use crate::args::Cli;
 use crate::stack_data::{self, Frame, ThreadStack};
 use crate::utils::{
-    display_final, ensure_file_exists, execute_command, get_sampling_info, setup_pager,
+    collect_samples, display_final, ensure_file_exists, get_sampling_info, setup_pager,
 };
 
 async fn do_run_eustack(
@@ -16,32 +17,7 @@ async fn do_run_eustack(
     interval: Option<f32>,
     count: i32,
 ) -> Result<Vec<ThreadStack>, String> {
-    let mut raw_outputs = vec![];
-    let effective_count = if interval.is_none() { 1 } else { count };
-    let sleep = interval.unwrap_or(0.0);
-
-    let mut remaining = effective_count;
-    loop {
-        match execute_command("eu-stack", args).await {
-            Ok((code, out, err)) => {
-                if code <= 1 {
-                    if !err.is_empty() {
-                        eprintln!("Warnings reported: {err}");
-                    }
-                    raw_outputs.push(out);
-                } else {
-                    return Err(err);
-                }
-            }
-            Err(err) => return Err(err.to_string()),
-        }
-        remaining -= 1;
-        if remaining == 0 {
-            break;
-        }
-        tokio::time::sleep(tokio::time::Duration::from_secs_f32(sleep)).await;
-    }
-
+    let raw_outputs = collect_samples("eu-stack", args, interval, count).await?;
     let mut all_stacks = Vec::new();
     for raw in &raw_outputs {
         all_stacks.extend(parse_eustack(raw));
@@ -49,11 +25,17 @@ async fn do_run_eustack(
     Ok(all_stacks)
 }
 
+static RE_PID: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"PID\s+(?P<pid>\d+)\s+-\s+").unwrap());
+static RE_TID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"TID\s+(?P<tid>\d+):").unwrap());
+static RE_FRAME: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^#(?P<depth>\d+)\s+(?P<addr>0x[0-9a-fA-F]+)\s+(?P<func>.+?)$").unwrap()
+});
+
 pub fn parse_eustack(input: &str) -> Vec<ThreadStack> {
-    let re_pid = Regex::new(r"PID\s+(?P<pid>\d+)\s+-\s+").unwrap();
-    let re_tid = Regex::new(r"TID\s+(?P<tid>\d+):").unwrap();
-    let re_frame =
-        Regex::new(r"^#(?P<depth>\d+)\s+(?P<addr>0x[0-9a-fA-F]+)\s+(?P<func>.+?)$").unwrap();
+    let re_pid = &RE_PID;
+    let re_tid = &RE_TID;
+    let re_frame = &RE_FRAME;
 
     let mut stacks = Vec::new();
     let mut pid = 0;

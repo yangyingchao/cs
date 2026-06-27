@@ -462,4 +462,85 @@ mod tests {
         assert_eq!(result.changed[0].before_count, 2);
         assert_eq!(result.changed[0].after_count, 5);
     }
+
+    #[test]
+    fn test_format_text_no_diff() {
+        let result = DiffResult {
+            added: vec![],
+            removed: vec![],
+            changed: vec![],
+        };
+        let text = format_diff_text(&result);
+        assert!(text.contains("(no differences)"));
+    }
+
+    #[test]
+    fn test_format_text_added_and_removed() {
+        let frames_added = vec![make_frame(0, "0x1", "new_func")];
+        let frames_removed = vec![make_frame(0, "0x2", "old_func")];
+        let result = DiffResult {
+            added: vec![StackDiffEntry {
+                signature: "new_func".into(),
+                frames: frames_added,
+                count: 2,
+            }],
+            removed: vec![StackDiffEntry {
+                signature: "old_func".into(),
+                frames: frames_removed,
+                count: 1,
+            }],
+            changed: vec![],
+        };
+        let text = format_diff_text(&result);
+        assert!(text.contains("[+] added: 1"));
+        assert!(text.contains("#0  0x1 new_func"));
+        assert!(text.contains("(2 threads)"));
+        assert!(text.contains("[-] removed: 1"));
+        assert!(text.contains("#0  0x2 old_func"));
+        assert!(text.contains("(1 thread)"));
+    }
+
+    #[test]
+    fn test_format_text_changed() {
+        let frames = vec![make_frame(0, "0xa", "top"), make_frame(1, "0xb", "middle")];
+        let result = DiffResult {
+            added: vec![],
+            removed: vec![],
+            changed: vec![ChangedEntry {
+                signature: "top;middle".into(),
+                frames,
+                before_count: 2,
+                after_count: 5,
+            }],
+        };
+        let text = format_diff_text(&result);
+        assert!(text.contains("[~] changed: 1"));
+        assert!(text.contains("#0  0xa top"));
+        assert!(text.contains("#1  0xb middle"));
+        assert!(text.contains("before: 2 threads  after: 5 threads"));
+    }
+
+    #[test]
+    fn test_format_json_basic() {
+        let frames = vec![make_frame(0, "0x1", "f1")];
+        let result = DiffResult {
+            added: vec![StackDiffEntry {
+                signature: "f1".into(),
+                frames: frames.clone(),
+                count: 1,
+            }],
+            removed: vec![],
+            changed: vec![],
+        };
+        let json = format_diff_json(&result, "before.json", "after.json");
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["tool"], "cs diff");
+        assert_eq!(parsed["before_label"], "before.json");
+        assert_eq!(parsed["after_label"], "after.json");
+        assert!(parsed["timestamp"].is_string());
+        assert_eq!(parsed["added"].as_array().unwrap().len(), 1);
+        assert_eq!(parsed["removed"].as_array().unwrap().len(), 0);
+        assert_eq!(parsed["changed"].as_array().unwrap().len(), 0);
+        assert_eq!(parsed["added"][0]["count"], 1);
+    }
 }

@@ -1,4 +1,5 @@
 use std::process;
+use std::sync::LazyLock;
 use std::sync::{Arc, Mutex};
 
 use futures::future::join_all;
@@ -7,7 +8,7 @@ use regex::Regex;
 
 use crate::args::Cli;
 use crate::stack_data::{self, Frame, ThreadStack};
-use crate::utils::{display_final, execute_command, get_sampling_info};
+use crate::utils::{collect_samples, display_final, get_sampling_info};
 
 async fn do_run_gdb(
     args: &[String],
@@ -15,32 +16,7 @@ async fn do_run_gdb(
     interval: Option<f32>,
     count: i32,
 ) -> Result<Vec<ThreadStack>, String> {
-    let mut raw_outputs = vec![];
-    let effective_count = if interval.is_none() { 1 } else { count };
-    let sleep = interval.unwrap_or(0.0);
-
-    let mut remaining = effective_count;
-    loop {
-        match execute_command("gdb", args).await {
-            Ok((code, out, err)) => {
-                if code <= 1 {
-                    if !err.is_empty() {
-                        eprintln!("Warnings reported: {err}");
-                    }
-                    raw_outputs.push(out);
-                } else {
-                    return Err(err);
-                }
-            }
-            Err(err) => return Err(err.to_string()),
-        }
-        remaining -= 1;
-        if remaining == 0 {
-            break;
-        }
-        tokio::time::sleep(tokio::time::Duration::from_secs_f32(sleep)).await;
-    }
-
+    let raw_outputs = collect_samples("gdb", args, interval, count).await?;
     let mut all_stacks = Vec::new();
     for raw_out in &raw_outputs {
         all_stacks.extend(parse_gdb(raw_out, !raw));
@@ -48,13 +24,24 @@ async fn do_run_gdb(
     Ok(all_stacks)
 }
 
+static RE_TID: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"Thread\s+(?P<threadnum>\d+)\s+.*\(LWP\s+(?P<lwp>\d+).*\):").unwrap()
+});
+static RE_DETACH: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"Inferior.*detached").unwrap());
+static RE_SIMPLIFY: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\s+in\s+(?P<func>.+?)\s+\(.*?\)\s+(at|from)\s+.*").unwrap());
+static RE_FRAME_NUM: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\s*#\s*(?P<depth>\d+)").unwrap());
+static RE_ADDR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"0x[0-9a-fA-F]+").unwrap());
+static RE_LIBRARY: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"from\s+(?P<lib>\S+)").unwrap());
+
 pub fn parse_gdb(input: &str, simplify: bool) -> Vec<ThreadStack> {
-    let re_tid = Regex::new(r"Thread\s+(?P<threadnum>\d+)\s+.*\(LWP\s+(?P<lwp>\d+).*\):").unwrap();
-    let re_detach = Regex::new(r"Inferior.*detached").unwrap();
-    let re_simplify = Regex::new(r"\s+in\s+(?P<func>.+?)\s+\(.*?\)\s+(at|from)\s+.*").unwrap();
-    let re_frame_num = Regex::new(r"^\s*#\s*(?P<depth>\d+)").unwrap();
-    let re_addr = Regex::new(r"0x[0-9a-fA-F]+").unwrap();
-    let re_library = Regex::new(r"from\s+(?P<lib>\S+)").unwrap();
+    let re_tid = &RE_TID;
+    let re_detach = &RE_DETACH;
+    let re_simplify = &RE_SIMPLIFY;
+    let re_frame_num = &RE_FRAME_NUM;
+    let re_addr = &RE_ADDR;
+    let re_library = &RE_LIBRARY;
 
     let mut stacks = Vec::new();
     let mut tid = 0;
