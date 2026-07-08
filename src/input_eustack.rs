@@ -160,7 +160,7 @@ pub async fn run_eustack(cli: &Cli) {
                     "-p".to_string(),
                     format!("{pid}"),
                 ];
-                println!(
+                eprintln!(
                     "Run for process: {pid:?} in thread: {:?}",
                     std::thread::current().id()
                 );

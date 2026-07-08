@@ -205,7 +205,7 @@ pub async fn list_process(cli: Cli) {
             if let Some(pattern) = cli.files.first() {
                 match regex::Regex::new(pattern) {
                     Ok(re) => {
-                        println!("Listing processes matching '{pattern}'");
+                        eprintln!("Listing processes matching '{pattern}'");
                         let mut lines = 0;
                         for s in cands {
                             if re.is_match(&s) {
@@ -215,10 +215,10 @@ pub async fn list_process(cli: Cli) {
                         }
 
                         if lines == 0 {
-                            println!("Failed to list process matching '{pattern}'.");
+                            eprintln!("Failed to list process matching '{pattern}'.");
                             std::process::exit(1);
                         } else {
-                            println!("Total {lines} process found.");
+                            eprintln!("Total {lines} process found.");
                         }
                     }
                     Err(err) => {
@@ -227,7 +227,7 @@ pub async fn list_process(cli: Cli) {
                     }
                 }
             } else {
-                println!("Listing all processes...");
+                eprintln!("Listing all processes...");
                 println!("{}", cands.join("\n"));
             };
         }
