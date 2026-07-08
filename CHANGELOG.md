@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.1] - 2026-07-08
+
+## 改进
+
+- 诊断/状态信息从 stdout 移至 stderr，避免干扰管道输出
+
+### Improvements
+
+- Moved diagnostic/status messages from stdout to stderr to avoid polluting piped output
+
 ## [0.2.0] - 2026-06-27
 
 ## 新功能
