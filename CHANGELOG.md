@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.2] - 2026-07-09
 
 ## 破坏性变更
 
@@ -27,7 +27,6 @@
 - `-E, --exclude <PATTERN>`: exclude stacks matching regex (repeatable)
 
 ## [0.2.1] - 2026-07-08
-
 ## 改进
 
 - 诊断/状态信息从 stdout 移至 stderr，避免干扰管道输出
