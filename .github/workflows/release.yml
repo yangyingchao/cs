@@ -192,10 +192,28 @@ jobs:
         unset IS_RELEASE ; if [[ $GITHUB_REF =~ ^refs/tags/v[0-9].* ]]; then IS_RELEASE='true' ; fi
         echo "IS_RELEASE=${IS_RELEASE}" >> $GITHUB_OUTPUT
 
+    - name: Extract release notes from CHANGELOG
+      if: steps.is-release.outputs.IS_RELEASE
+      id: release-notes
+      shell: bash
+      run: |
+        VERSION="${{ needs.crate_metadata.outputs.version }}"
+        awk -v ver="$VERSION" '
+          $0 ~ "^## \\[" ver "\\]" { found=1; next }
+          /^## \[/ && found { exit }
+          found { print }
+        ' CHANGELOG.md > release_notes.txt
+        {
+          echo "body<<EOF"
+          cat release_notes.txt
+          echo "EOF"
+        } >> $GITHUB_OUTPUT
+
     - name: Publish archives and packages
       uses: softprops/action-gh-release@v3
       if: steps.is-release.outputs.IS_RELEASE
       with:
         files: |
           ${{ steps.package.outputs.PKG_PATH }}
+        body: ${{ steps.release-notes.outputs.body }}
         draft: true
