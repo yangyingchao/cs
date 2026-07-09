@@ -92,10 +92,25 @@ pub async fn uniquify_stack_files(cli: Cli) {
         }
     };
 
-    if cli.json_mode {
+    let groups = if cli.exclude.is_empty() {
+        groups
+    } else {
+        let patterns = stack_data::compile_excludes(&cli.exclude).unwrap_or_else(|e| {
+            eprintln!("error: invalid exclude regex: {e}");
+            process::exit(2);
+        });
+        stack_data::filter_excluded(groups, &patterns)
+    };
+
+    if cli.effective_json_mode() {
         println!("{}", stack_data::format_json(&groups, "unknown", None));
     } else {
-        println!("{}", stack_data::format_text(&groups, ""));
+        let max_groups = if cli.unique_mode && !cli.verbose && !cli.effective_json_mode() {
+            Some(stack_data::TRUNCATION_LIMIT)
+        } else {
+            None
+        };
+        println!("{}", stack_data::format_text(&groups, "", max_groups));
     }
 
     process::exit(0);

@@ -1,8 +1,16 @@
 use std::process::exit;
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 
 use crate::match_mode::MatchMode;
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum OutputFormat {
+    /// 文本格式
+    Text,
+    /// JSON 格式
+    Json,
+}
 
 #[derive(Parser, Clone)]
 #[command(
@@ -71,7 +79,7 @@ pub struct Cli {
     pub count: i32,
 
     /// 获取调用栈的帧数，0 表示不限制
-    #[arg(short = 'f', long = "frames", default_value_t = 2048)]
+    #[arg(short = 'F', long = "frames", default_value_t = 2048)]
     pub frames: i32,
 
     /// 宽模式：显示进程时显示所有字符
@@ -107,12 +115,25 @@ pub struct Cli {
     pub english_mode: bool,
 
     /// 以 JSON 格式输出堆栈信息
-    #[arg(long = "json", default_value_t = false)]
+    #[arg(short = 'j', long = "json", default_value_t = false)]
     pub json_mode: bool,
 
-    /// 堆栈匹配模式：默认 auto,
-    #[arg(long = "match", value_enum)]
+    /// 堆栈去重时的匹配模式：precise（按完整帧信息去重）或 fuzzy（仅按函数名去重）。
+    /// 默认 auto：单进程用 precise，多进程/文件/diff 用 fuzzy。
+    #[arg(long = "match", value_enum, verbatim_doc_comment)]
     pub match_mode: Option<MatchMode>,
+
+    /// 排除匹配指定正则的堆栈（可重复使用，匹配帧的 function 字段）
+    #[arg(short = 'E', long = "exclude", verbatim_doc_comment)]
+    pub exclude: Vec<String>,
+
+    /// 输出格式：text 或 json（优先于 --json）
+    #[arg(short = 'f', long = "format", value_enum)]
+    pub format: Option<OutputFormat>,
+
+    /// 显示完整输出（不截断）
+    #[arg(short = 'v', long = "verbose", default_value_t = false)]
+    pub verbose: bool,
 
     /// 对比两个 JSON 格式的堆栈快照文件
     #[arg(long = "diff", num_args = 2, value_names = ["BEFORE", "AFTER"])]
@@ -159,6 +180,17 @@ impl Cli {
             diff: None,
             diff_live: false,
             match_mode: None,
+            exclude: vec![],
+            format: None,
+            verbose: false,
+        }
+    }
+
+    pub fn effective_json_mode(&self) -> bool {
+        match self.format {
+            Some(OutputFormat::Json) => true,
+            Some(OutputFormat::Text) => false,
+            None => self.json_mode,
         }
     }
 
@@ -229,7 +261,7 @@ Options:
   -n, --count <COUNT>            Number of samples to take.
                                  Applies only when sampling a running process with `-t`.
                                  [default: 1]
-  -f, --frames <FRAMES>          Frame count to show (0 = unlimited) [default: 2048]
+  -F, --frames <FRAMES>          Frame count to show (0 = unlimited) [default: 2048]
   -W, --Wide                     Wide mode: show full line in process list
   -M, --multi                    Multi mode: allow selecting multiple processes
   -U, --unique                   Unique mode: deduplicate identical stacks
@@ -237,11 +269,17 @@ Options:
   -R, --raw                      Raw mode: skip stack simplification (works with `-G` only)
   -N, --no-pager                 Disable pager
   -P, --pattern <PATTERN>        Filter processes by name PATTERN
+  -E, --exclude <PATTERN>        Exclude stacks matching PATTERN (regex on function field)
       --en                       Show English help (requires --help or -h)
       --diff <BEFORE> <AFTER>    Diff two JSON stack snapshot files
       --diff-live                Live diff: sample twice, show diff
-      --json                     JSON output format
-      --match <MATCH_MODE>       Stack matching: precise or fuzzy (default: auto)
+  -j, --json                     JSON output format
+  -f, --format <FMT>             Output format: text or json (overrides --json)
+  -v, --verbose                  Show full output (no truncation)
+      --match <MODE>             Stack dedup match mode:
+                                    - precise (full frame info) or
+                                    - fuzzy (function names only).
+                                    - Auto: precise for single source, fuzzy for multi-source/diff
   -h, --help                     Print help
   -V, --version                  Print version
 
@@ -485,6 +523,85 @@ fn test_match_mode_diff_can_override_to_precise() {
     assert_eq!(cli.effective_match_mode(), MatchMode::Precise);
     // precise with multi-source should trigger warning
     cli.warn_if_match_conflict();
+}
+
+#[test]
+fn test_effective_json_mode_default() {
+    let cli = Cli::default();
+    assert!(!cli.effective_json_mode());
+}
+
+#[test]
+fn test_effective_json_mode_json_flag() {
+    let cli = Cli {
+        json_mode: true,
+        ..Cli::default()
+    };
+    assert!(cli.effective_json_mode());
+}
+
+#[test]
+fn test_effective_json_mode_format_overrides() {
+    let cli = Cli {
+        format: Some(OutputFormat::Json),
+        json_mode: false,
+        ..Cli::default()
+    };
+    assert!(cli.effective_json_mode());
+
+    let cli = Cli {
+        format: Some(OutputFormat::Text),
+        json_mode: true,
+        ..Cli::default()
+    };
+    assert!(!cli.effective_json_mode());
+}
+
+#[test]
+fn test_format_json_equivalent_to_json() {
+    let cli = unwrap_run(parse_args(vec!["cs", "--format", "json"]));
+    assert!(cli.effective_json_mode());
+}
+
+#[test]
+fn test_format_text_overrides_json() {
+    let cli = unwrap_run(parse_args(vec!["cs", "--format", "text", "--json"]));
+    assert!(!cli.effective_json_mode());
+}
+
+#[test]
+fn test_format_json_overrides_json() {
+    let cli = unwrap_run(parse_args(vec!["cs", "--format", "json", "--json"]));
+    assert!(cli.effective_json_mode());
+}
+
+#[test]
+fn test_short_j_equivalent_to_json() {
+    let cli = unwrap_run(parse_args(vec!["cs", "-j"]));
+    assert!(cli.json_mode);
+    assert!(cli.effective_json_mode());
+}
+
+#[test]
+fn test_short_f_for_format() {
+    let cli = unwrap_run(parse_args(vec!["cs", "-f", "json"]));
+    assert!(matches!(cli.format, Some(OutputFormat::Json)));
+    assert!(cli.effective_json_mode());
+}
+
+#[test]
+#[allow(non_snake_case)]
+fn test_short_F_for_frames() {
+    let cli = unwrap_run(parse_args(vec!["cs", "-F", "10"]));
+    assert_eq!(cli.frames, 10);
+}
+
+#[test]
+fn test_exclude_repeatable() {
+    let cli = unwrap_run(parse_args(vec!["cs", "-E", "foo", "-E", "bar"]));
+    assert_eq!(cli.exclude.len(), 2);
+    assert_eq!(cli.exclude[0], "foo");
+    assert_eq!(cli.exclude[1], "bar");
 }
 
 #[cfg(test)]

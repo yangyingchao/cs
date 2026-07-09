@@ -99,7 +99,17 @@ fn format_result(
         stack_data::to_groups(all_stacks)
     };
 
-    if cli.json_mode {
+    let groups = if cli.exclude.is_empty() {
+        groups
+    } else {
+        let patterns = stack_data::compile_excludes(&cli.exclude).unwrap_or_else(|e| {
+            eprintln!("error: invalid exclude regex: {e}");
+            process::exit(2);
+        });
+        stack_data::filter_excluded(groups, &patterns)
+    };
+
+    if cli.effective_json_mode() {
         let sampling = get_sampling_info(interval, count);
         stack_data::format_json(&groups, tool, sampling)
     } else {
@@ -112,7 +122,12 @@ fn format_result(
         } else {
             String::new()
         };
-        stack_data::format_text(&groups, &prefix)
+        let max_groups = if cli.unique_mode && !cli.verbose && !cli.effective_json_mode() {
+            Some(stack_data::TRUNCATION_LIMIT)
+        } else {
+            None
+        };
+        stack_data::format_text(&groups, &prefix, max_groups)
     }
 }
 

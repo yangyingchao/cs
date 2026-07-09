@@ -138,15 +138,53 @@ pub fn to_groups(stacks: Vec<ThreadStack>) -> Vec<UniqueStackGroup> {
         .collect()
 }
 
+// ---- Truncation ----
+
+pub const TRUNCATION_LIMIT: usize = 5;
+
+// ---- Exclude filtering ----
+
+pub fn compile_excludes(patterns: &[String]) -> Result<Vec<Regex>, regex::Error> {
+    patterns.iter().map(|p| Regex::new(p)).collect()
+}
+
+pub fn filter_excluded(
+    mut groups: Vec<UniqueStackGroup>,
+    patterns: &[Regex],
+) -> Vec<UniqueStackGroup> {
+    if patterns.is_empty() {
+        return groups;
+    }
+    groups.retain(|group| {
+        // All threads in a UniqueStackGroup share the same frames, so if any
+        // frame matches an exclude pattern every thread in this group is
+        // excluded and the group is dropped.
+        !group
+            .frames
+            .iter()
+            .any(|f| patterns.iter().any(|p| p.is_match(&f.function)))
+    });
+    groups
+}
+
 // ---- Formatting ----
 
-pub fn format_text(groups: &[UniqueStackGroup], sampling_prefix: &str) -> String {
+pub fn format_text(
+    groups: &[UniqueStackGroup],
+    sampling_prefix: &str,
+    max_groups: Option<usize>,
+) -> String {
     let mut outputs = Vec::new();
     let mut all_suspicious = Vec::new();
 
     let r_match = &RE_SUSPICIOUS_HIGHLIGHT;
 
-    for group in groups {
+    let (visible, hidden) = match max_groups {
+        Some(n) if n < groups.len() => (&groups[..n], Some(&groups[n..])),
+        _ => (groups, None),
+    };
+
+    for group in visible {
         let tids_str = group
             .threads
             .iter()
@@ -188,7 +226,17 @@ pub fn format_text(groups: &[UniqueStackGroup], sampling_prefix: &str) -> String
         ));
     }
 
-    let body = outputs.join("\n");
+    let mut body = outputs.join("\n");
+
+    if let Some(hidden_groups) = hidden {
+        let hidden_count = hidden_groups.len();
+        let suspicious_count = hidden_groups.iter().filter(|g| g.suspicious).count();
+        body.push_str(&format!(
+            "\n... and {hidden_count} more unique stack groups \
+             ({suspicious_count} suspicious). Use --verbose to show all."
+        ));
+    }
+
     if sampling_prefix.is_empty() {
         body
     } else {
@@ -228,6 +276,22 @@ mod tests {
             pid,
             tid,
             thread_name: String::new(),
+            frames,
+        }
+    }
+
+    fn make_thread(pid: i32, tid: i32) -> ThreadIdent {
+        ThreadIdent {
+            pid,
+            tid,
+            thread_name: String::new(),
+        }
+    }
+
+    fn make_group(threads: Vec<ThreadIdent>, frames: Vec<Frame>) -> UniqueStackGroup {
+        UniqueStackGroup {
+            suspicious: any_frame_suspicious(&frames),
+            threads,
             frames,
         }
     }
@@ -283,5 +347,129 @@ mod tests {
 
         let precise_groups = dedup_stacks(stacks, MatchMode::Precise);
         assert_eq!(precise_groups.len(), 2);
+    }
+
+    #[test]
+    fn test_filter_excluded_no_match() {
+        let groups = vec![make_group(
+            vec![make_thread(1, 100)],
+            vec![make_frame(0, "0x1", "func_x")],
+        )];
+        let patterns = compile_excludes(&["nonexistent".to_string()]).unwrap();
+        let result = filter_excluded(groups, &patterns);
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn test_filter_excluded_partial_group() {
+        // After dedup, all threads in a UniqueStackGroup share the same frames.
+        // If any frame matches an exclude pattern, the entire group is dropped.
+        let groups = vec![
+            make_group(
+                vec![make_thread(1, 100), make_thread(1, 101)],
+                vec![make_frame(0, "0x1", "keep_func")],
+            ),
+            make_group(
+                vec![make_thread(1, 200)],
+                vec![make_frame(0, "0x2", "drop_func")],
+            ),
+        ];
+        let patterns = compile_excludes(&["drop_func".to_string()]).unwrap();
+        let result = filter_excluded(groups, &patterns);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].threads.len(), 2);
+        assert!(result[0].frames.iter().all(|f| f.function == "keep_func"));
+    }
+
+    #[test]
+    fn test_filter_excluded_all_removed() {
+        let groups = vec![
+            make_group(
+                vec![make_thread(1, 100)],
+                vec![make_frame(0, "0x1", "bad_func")],
+            ),
+            make_group(
+                vec![make_thread(1, 200)],
+                vec![make_frame(0, "0x2", "also_bad")],
+            ),
+        ];
+        let patterns = compile_excludes(&["bad".to_string()]).unwrap();
+        let result = filter_excluded(groups, &patterns);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_format_text_truncation() {
+        let groups: Vec<UniqueStackGroup> = (0..6)
+            .map(|i| {
+                make_group(
+                    vec![make_thread(1, 100 + i)],
+                    vec![make_frame(0, "0x1", "func_x")],
+                )
+            })
+            .collect();
+        let output = format_text(&groups, "", Some(3));
+        assert!(output.contains("... and 3 more unique stack groups"));
+        assert!(output.contains("Use --verbose to show all."));
+    }
+
+    #[test]
+    fn test_format_text_no_truncation_when_under_limit() {
+        let groups: Vec<UniqueStackGroup> = (0..2)
+            .map(|i| {
+                make_group(
+                    vec![make_thread(1, 100 + i)],
+                    vec![make_frame(0, "0x1", "func_x")],
+                )
+            })
+            .collect();
+        let output = format_text(&groups, "", Some(5));
+        assert!(!output.contains("... and"));
+        assert!(!output.contains("Use --verbose"));
+    }
+
+    #[test]
+    fn test_format_text_no_truncation_when_none() {
+        let groups: Vec<UniqueStackGroup> = (0..6)
+            .map(|i| {
+                make_group(
+                    vec![make_thread(1, 100 + i)],
+                    vec![make_frame(0, "0x1", "func_x")],
+                )
+            })
+            .collect();
+        let output = format_text(&groups, "", None);
+        assert!(!output.contains("... and"));
+        assert!(!output.contains("Use --verbose"));
+    }
+
+    #[test]
+    fn test_format_text_truncation_suspicious_count() {
+        let normal = || make_frame(0, "0x1", "func_x");
+        let suspicious = || make_frame(0, "0x1", "raise");
+        let groups: Vec<UniqueStackGroup> = vec![
+            make_group(vec![make_thread(1, 100)], vec![normal()]),
+            make_group(vec![make_thread(1, 101)], vec![normal()]),
+            make_group(vec![make_thread(1, 102)], vec![normal()]),
+            make_group(vec![make_thread(1, 103)], vec![normal()]),
+            make_group(vec![make_thread(1, 104)], vec![suspicious()]),
+            make_group(vec![make_thread(1, 105)], vec![suspicious()]),
+        ];
+        let output = format_text(&groups, "", Some(3));
+        assert!(output.contains("... and 3 more unique stack groups"));
+        assert!(output.contains("(2 suspicious)"));
+    }
+
+    #[test]
+    fn test_compile_excludes_invalid_regex() {
+        let result = compile_excludes(&["[invalid".to_string()]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_compile_excludes_valid_regex() {
+        let result = compile_excludes(&["func_.*".to_string(), "raise".to_string()]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 2);
     }
 }

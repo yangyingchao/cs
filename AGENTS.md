@@ -80,3 +80,4 @@ Feature flag: `runtime-agnostic` (empty — marker only).
 - No MSRV declared in `Cargo.toml`
 - `.agent-shell/transcripts/` — old session transcripts, not relevant for development
 - `images/` and `src/images/` exist but are empty
+- 如果变更了 `args.rs` （例如，增加或者修改了参数），要更新 `README.org` 里面的使用说明示例。

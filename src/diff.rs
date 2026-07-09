@@ -247,9 +247,15 @@ pub async fn run_diff(before_path: &str, after_path: &str, cli: &Cli) {
     });
 
     let mode = cli.effective_match_mode();
-    let result = compute_diff(before_data.stacks, after_data.stacks, mode);
+    let patterns = crate::stack_data::compile_excludes(&cli.exclude).unwrap_or_else(|e| {
+        eprintln!("error: invalid exclude regex: {e}");
+        std::process::exit(2);
+    });
+    let before = crate::stack_data::filter_excluded(before_data.stacks, &patterns);
+    let after = crate::stack_data::filter_excluded(after_data.stacks, &patterns);
+    let result = compute_diff(before, after, mode);
 
-    if cli.json_mode {
+    if cli.effective_json_mode() {
         println!("{}", format_diff_json(&result, before_path, after_path));
     } else {
         println!("{}", format_diff_text(&result));
@@ -337,11 +343,17 @@ pub async fn run_diff_live(cli: &Cli) {
     let after = sample_once(cli, pid).await;
 
     let mode = cli.effective_match_mode();
+    let patterns = crate::stack_data::compile_excludes(&cli.exclude).unwrap_or_else(|e| {
+        eprintln!("error: invalid exclude regex: {e}");
+        std::process::exit(2);
+    });
     let before = crate::stack_data::dedup_stacks(before, mode);
     let after = crate::stack_data::dedup_stacks(after, mode);
+    let before = crate::stack_data::filter_excluded(before, &patterns);
+    let after = crate::stack_data::filter_excluded(after, &patterns);
     let result = compute_diff(before, after, mode);
 
-    if cli.json_mode {
+    if cli.effective_json_mode() {
         println!(
             "{}",
             format_diff_json(&result, "(live before)", "(live after)")

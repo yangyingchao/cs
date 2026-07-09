@@ -1,5 +1,31 @@
 # Changelog
 
+## [Unreleased]
+
+## 破坏性变更
+
+- `-f` 短选项从 `--frames` 改为 `--format`，`--frames` 短选项变为 `-F`
+- `-U` 文本输出默认截断到 5 组，使用 `--verbose` (`-v`) 恢复完整输出（JSON 输出不受影响；`--verbose` 仅影响文本输出）
+
+## 新功能
+
+- `--format text|json` (`-f`)：输出格式选择（优先于 `--json`）
+- `-j`：`--json` 的短选项
+- `-v, --verbose`：显示完整输出（不截断）
+- `-E, --exclude <PATTERN>`：排除匹配正则的堆栈（可重复使用）
+
+### Breaking Changes
+
+- `-f` short option changed from `--frames` to `--format`; `--frames` short option is now `-F`
+- `-U` text output truncates to 5 groups by default; use `--verbose` (`-v`) for full output (JSON output is not affected; `--verbose` only applies to text output)
+
+### New Features
+
+- `--format text|json` (`-f`): output format selection (overrides `--json`)
+- `-j`: short option for `--json`
+- `-v, --verbose`: show full output (no truncation)
+- `-E, --exclude <PATTERN>`: exclude stacks matching regex (repeatable)
+
 ## [0.2.1] - 2026-07-08
 
 ## 改进
