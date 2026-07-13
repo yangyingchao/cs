@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### 变更
+
+- **移除英文帮助** (`--en`)：不再支持英文帮助输出，`--en` 标记已删除
+
+### Changes
+
+- **Removed English Help** (`--en`): English help output is no longer supported, `--en` flag removed
+
 ## [0.2.2] - 2026-07-09
 
 ## 破坏性变更

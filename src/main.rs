@@ -11,7 +11,7 @@ mod stack_data;
 
 use std::process::exit;
 
-use crate::args::{parse_args, print_english_help, ArgsAction};
+use crate::args::parse_args;
 use crate::diff::{run_diff, run_diff_live};
 use crate::input_eustack::run_eustack;
 use crate::input_file::uniquify_stack_files;
@@ -21,13 +21,7 @@ use utils::{choose_process, execute_command, list_process};
 #[tokio::main]
 async fn main() {
     let _ = utils::get_terminal_size(); // must be done before setup pager
-    let mut cli = match parse_args(std::env::args()) {
-        ArgsAction::EnglishHelp => {
-            print_english_help();
-            return;
-        }
-        ArgsAction::Run(cli) => cli,
-    };
+    let mut cli = parse_args(std::env::args());
 
     if !cli.gdb_mode {
         if let Ok((code, _out, _err)) = execute_command("which", ["eu-stack"]).await {

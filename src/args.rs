@@ -22,6 +22,7 @@ pub enum OutputFormat {
     after_help = r#"基本示例:
   - `cs --help`:                        显示本帮助信息
   - `cs`:                               交互式选择进程并显示调用栈
+  - `cs -M`:                            交互式选择多个进程并显示调用栈
   - `cs -p 905`:                        显示进程 905 的调用栈
   - `cs -p 905 -U`:                     显示进程 905 的去重调用栈
   - `cs -U -P google.chrome`:           显示所有 Chrome 进程的去重调用栈
@@ -82,45 +83,13 @@ pub struct Cli {
     #[arg(short = 'F', long = "frames", default_value_t = 2048)]
     pub frames: i32,
 
-    /// 宽模式：显示进程时显示所有字符
-    #[arg(short = 'W', long = "Wide", default_value_t = false)]
-    pub wide_mode: bool,
-
-    /// 多选模式：选择进程时支持多选
-    #[arg(short = 'M', long = "multi", default_value_t = false)]
-    pub multi_mode: bool,
-
-    /// 去重模式：显示调用栈时合并相同栈
-    #[arg(short = 'U', long = "unique", default_value_t = false)]
-    pub unique_mode: bool,
-
-    /// 使用 gdb 获取调用栈（默认使用 eu-stack）
-    #[arg(short = 'G', long = "gdb", default_value_t = false)]
-    pub gdb_mode: bool,
-
-    /// 原始模式：不对调用栈做简化（仅与 -G 配合使用）
-    #[arg(short = 'R', long = "raw", default_value_t = false)]
-    pub raw_mode: bool,
-
-    /// 禁用分页器
-    #[arg(short = 'N', long = "no-pager", default_value_t = false)]
-    pub no_pager: bool,
-
-    /// 显示名称匹配 PATTERN 的进程的调用栈
-    #[arg(short = 'P', long = "pattern")]
-    pub pattern: Option<String>,
-
-    /// 显示英文帮助（需与 --help 或 -h 配合使用）
-    #[arg(long = "en", default_value_t = false)]
-    pub english_mode: bool,
-
     /// 以 JSON 格式输出堆栈信息
     #[arg(short = 'j', long = "json", default_value_t = false)]
     pub json_mode: bool,
 
     /// 堆栈去重时的匹配模式：precise（按完整帧信息去重）或 fuzzy（仅按函数名去重）。
     /// 默认 auto：单进程用 precise，多进程/文件/diff 用 fuzzy。
-    #[arg(long = "match", value_enum, verbatim_doc_comment)]
+    #[arg(short = 'm', long = "match", value_enum, verbatim_doc_comment)]
     pub match_mode: Option<MatchMode>,
 
     /// 排除匹配指定正则的堆栈（可重复使用，匹配帧的 function 字段）
@@ -149,6 +118,34 @@ pub struct Cli {
     )]
     pub diff_live: bool,
 
+    /// 宽模式：显示进程时显示所有字符
+    #[arg(short = 'W', long = "Wide", default_value_t = false)]
+    pub wide_mode: bool,
+
+    /// 多选模式：选择进程时支持多选
+    #[arg(short = 'M', long = "multi", default_value_t = false)]
+    pub multi_mode: bool,
+
+    /// 去重模式：显示调用栈时合并相同栈
+    #[arg(short = 'U', long = "unique", default_value_t = false)]
+    pub unique_mode: bool,
+
+    /// 使用 gdb 获取调用栈（默认使用 eu-stack）
+    #[arg(short = 'G', long = "gdb", default_value_t = false)]
+    pub gdb_mode: bool,
+
+    /// 原始模式：不对调用栈做简化（仅与 -G 配合使用）
+    #[arg(short = 'R', long = "raw", default_value_t = false)]
+    pub raw_mode: bool,
+
+    /// 禁用分页器
+    #[arg(short = 'N', long = "no-pager", default_value_t = false)]
+    pub no_pager: bool,
+
+    /// 显示名称匹配 PATTERN 的进程的调用栈
+    #[arg(short = 'P', long = "pattern")]
+    pub pattern: Option<String>,
+
     /// 读取调用栈的文件，使用 "-" 表示标准输入；多个文件会被合并
     #[clap(allow_hyphen_values=true, num_args=0..,)]
     pub files: Vec<String>,
@@ -175,7 +172,6 @@ impl Cli {
             files: vec![],
             no_pager: false,
             pattern: None,
-            english_mode: false,
             json_mode: false,
             diff: None,
             diff_live: false,
@@ -232,97 +228,15 @@ impl Cli {
     }
 }
 
-fn is_english_mode(raw_args: &[String]) -> bool {
-    raw_args.iter().any(|a| a == "--en")
-}
-
-fn is_help_requested(raw_args: &[String]) -> bool {
-    raw_args.iter().any(|a| a == "-h" || a == "--help")
-}
-
-fn english_help_text() -> &'static str {
-    r#"Call stack analysis tool for processes
-
-Usage: cs [OPTIONS] [FILES]...
-
-Arguments:
-  [FILES]...      files to read stack from ("-" for stdin); multiple files will be merged
-
-Options:
-  -p, --pid <PIDS>               Show stack of process PID
-      --parent <PARENT>          Show stack of all child processes of PARENT
-  -c, --core <COREFILE>          Show stack found in COREFILE
-  -e, --executable <EXECUTABLE>  EXECUTABLE that produced COREFILE (optional)
-  -u, --users <USERS>            Filter processes by user list (comma-separated)
-  -i, --initial <INITIAL>        Initial value to filter process
-  -l, --list                     List processes
-  -t, --interval <INTERVAL>      Sampling interval in seconds (min: 0.1).
-                                 Applies only when sampling a running process.
-  -n, --count <COUNT>            Number of samples to take.
-                                 Applies only when sampling a running process with `-t`.
-                                 [default: 1]
-  -F, --frames <FRAMES>          Frame count to show (0 = unlimited) [default: 2048]
-  -W, --Wide                     Wide mode: show full line in process list
-  -M, --multi                    Multi mode: allow selecting multiple processes
-  -U, --unique                   Unique mode: deduplicate identical stacks
-  -G, --gdb                      Use gdb instead of eu-stack
-  -R, --raw                      Raw mode: skip stack simplification (works with `-G` only)
-  -N, --no-pager                 Disable pager
-  -P, --pattern <PATTERN>        Filter processes by name PATTERN
-  -E, --exclude <PATTERN>        Exclude stacks matching PATTERN (regex on function field)
-      --en                       Show English help (requires --help or -h)
-      --diff <BEFORE> <AFTER>    Diff two JSON stack snapshot files
-      --diff-live                Live diff: sample twice, show diff
-  -j, --json                     JSON output format
-  -f, --format <FMT>             Output format: text or json (overrides --json)
-  -v, --verbose                  Show full output (no truncation)
-      --match <MODE>             Stack dedup match mode:
-                                    - precise (full frame info) or
-                                    - fuzzy (function names only).
-                                    - Auto: precise for single source, fuzzy for multi-source/diff
-  -h, --help                     Print help
-  -V, --version                  Print version
-
-Basic Usage:
-  - `cs --help`:                        Show Chinese help (default)
-  - `cs`:                               Choose process and show its call stack.
-  - `cs -p 905`:                        Show stack of process 905.
-  - `cs -p 905 -U`:                     Show unique stack for process 905.
-  - `cs -l -u user`:                    Show processes of USER.
-  - `cs -U -P google.chrome`:           Unique stacks of all Chrome processes.
-
-Advanced Usage:
-  - `cs -U -p 905 -t 0.5 -n 3`:         Sample 905 3 times (0.5s apart), uniquify.
-  - `cs -p 905 --json > snap.json`:     Save stack snapshot as JSON.
-  - `cs --diff before.json after.json`:	Diff two JSON snapshot files.
-  - `cs --diff-live -p 905 -t 2`:       Sample twice (2s interval), show diff.
-  - `cs --diff-live -p 905`:            Press ENTER for second sample, show diff.
-"#
-}
-
-pub fn print_english_help() {
-    println!("{}", english_help_text());
-}
-
-#[allow(clippy::large_enum_variant)]
-pub enum ArgsAction {
-    Run(Cli),
-    EnglishHelp,
-}
-
-pub fn parse_args<T, S>(args: T) -> ArgsAction
+pub fn parse_args<T, S>(args: T) -> Cli
 where
     T: IntoIterator<Item = S>,
     S: Into<String>,
 {
     let args = args.into_iter().map(|x| x.into()).collect::<Vec<String>>();
     if args.len() == 1 {
-        ArgsAction::Run(Cli::default())
+        Cli::default()
     } else {
-        if is_help_requested(&args) && is_english_mode(&args) {
-            return ArgsAction::EnglishHelp;
-        }
-
         let mut cli = Cli::parse_from(args);
         if cli.files.len() > 1 && cli.files.contains(&"-".to_owned()) {
             eprintln!("stdin should not be used together with other files");
@@ -343,39 +257,31 @@ where
             }
         };
 
-        ArgsAction::Run(cli)
-    }
-}
-
-#[cfg(test)]
-fn unwrap_run(action: ArgsAction) -> Cli {
-    match action {
-        ArgsAction::Run(cli) => cli,
-        ArgsAction::EnglishHelp => panic!("expected Run, got EnglishHelp"),
+        cli
     }
 }
 
 #[tokio::test]
 async fn test_parse_args() {
-    let cli = unwrap_run(parse_args(vec!["cs", "--pid", "1000"]));
+    let cli = parse_args(vec!["cs", "--pid", "1000"]);
     assert_eq!(cli.pids.unwrap().first().unwrap(), &1000);
     assert!(!cli.unique_mode);
     assert!(cli.users.is_none());
     assert!(!cli.gdb_mode);
     assert!(cli.files.is_empty());
 
-    let cli = unwrap_run(parse_args(vec!["cs", "-U", "-c", "corefile"]));
+    let cli = parse_args(vec!["cs", "-U", "-c", "corefile"]);
     assert!(cli.unique_mode);
     assert_eq!(cli.core, Some("corefile".to_owned()));
     assert!(!cli.list);
     assert!(cli.executable.is_none());
 
     // -c & -e should be able to work together
-    let cli = unwrap_run(parse_args(vec!["cs", "-c", "corefile", "-e", "executable"]));
+    let cli = parse_args(vec!["cs", "-c", "corefile", "-e", "executable"]);
     assert_eq!(cli.core, Some("corefile".to_owned()));
     assert_eq!(cli.executable, Some("executable".to_owned()));
 
-    let cli = unwrap_run(parse_args(vec!["cs", "-l", "-u", "someone"]));
+    let cli = parse_args(vec!["cs", "-l", "-u", "someone"]);
     assert!(cli.list);
     assert_eq!(cli.users.unwrap(), "someone");
 
@@ -392,62 +298,17 @@ async fn test_parse_args() {
     }
 
     // trailing args should be files
-    let cli = unwrap_run(parse_args(vec!["cs", "file-1", "file-2"]));
+    let cli = parse_args(vec!["cs", "file-1", "file-2"]);
     assert!(cli.files.len() == 2);
     println!("{:?}", cli.files);
 
-    let cli = unwrap_run(parse_args(vec!["cs", "-"]));
+    let cli = parse_args(vec!["cs", "-"]);
     assert!(cli.files.len() == 1);
     println!("{:?}", cli.files);
 
-    let cli = unwrap_run(parse_args(vec!["cs", "-t", "0.001", "-n", "3"]));
+    let cli = parse_args(vec!["cs", "-t", "0.001", "-n", "3"]);
     assert_eq!(cli.interval.unwrap(), 0.1);
     assert_eq!(cli.count, 3);
-}
-
-#[test]
-fn test_is_english_mode() {
-    assert!(is_english_mode(&["cs".into(), "--en".into()]));
-    assert!(!is_english_mode(&["cs".into()]));
-    assert!(!is_english_mode(&["cs".into(), "--help".into()]));
-}
-
-#[test]
-fn test_is_help_requested() {
-    assert!(is_help_requested(&["cs".into(), "--help".into()]));
-    assert!(is_help_requested(&["cs".into(), "-h".into()]));
-    assert!(!is_help_requested(&["cs".into(), "--en".into()]));
-}
-
-#[test]
-fn test_english_help_contains_key_phrases() {
-    let text = english_help_text();
-    assert!(text.contains("Call stack analysis tool"));
-    assert!(text.contains("Usage"));
-    assert!(text.contains("--pid"));
-    assert!(text.contains("--en"));
-    assert!(text.contains("Basic Usage"));
-}
-
-#[test]
-fn test_en_flag_with_help_not_present() {
-    let cli = unwrap_run(parse_args(vec!["cs", "--en", "--pid", "1000"]));
-    assert!(cli.english_mode);
-    assert_eq!(cli.pids.unwrap().first().unwrap(), &1000);
-}
-
-#[test]
-fn test_en_flag_not_present() {
-    let cli = unwrap_run(parse_args(vec!["cs", "--pid", "1000"]));
-    assert!(!cli.english_mode);
-}
-
-#[test]
-fn test_en_help_action() {
-    assert!(matches!(
-        parse_args(vec!["cs", "--en", "--help"]),
-        ArgsAction::EnglishHelp
-    ));
 }
 
 #[test]
@@ -559,32 +420,32 @@ fn test_effective_json_mode_format_overrides() {
 
 #[test]
 fn test_format_json_equivalent_to_json() {
-    let cli = unwrap_run(parse_args(vec!["cs", "--format", "json"]));
+    let cli = parse_args(vec!["cs", "--format", "json"]);
     assert!(cli.effective_json_mode());
 }
 
 #[test]
 fn test_format_text_overrides_json() {
-    let cli = unwrap_run(parse_args(vec!["cs", "--format", "text", "--json"]));
+    let cli = parse_args(vec!["cs", "--format", "text", "--json"]);
     assert!(!cli.effective_json_mode());
 }
 
 #[test]
 fn test_format_json_overrides_json() {
-    let cli = unwrap_run(parse_args(vec!["cs", "--format", "json", "--json"]));
+    let cli = parse_args(vec!["cs", "--format", "json", "--json"]);
     assert!(cli.effective_json_mode());
 }
 
 #[test]
 fn test_short_j_equivalent_to_json() {
-    let cli = unwrap_run(parse_args(vec!["cs", "-j"]));
+    let cli = parse_args(vec!["cs", "-j"]);
     assert!(cli.json_mode);
     assert!(cli.effective_json_mode());
 }
 
 #[test]
 fn test_short_f_for_format() {
-    let cli = unwrap_run(parse_args(vec!["cs", "-f", "json"]));
+    let cli = parse_args(vec!["cs", "-f", "json"]);
     assert!(matches!(cli.format, Some(OutputFormat::Json)));
     assert!(cli.effective_json_mode());
 }
@@ -592,38 +453,14 @@ fn test_short_f_for_format() {
 #[test]
 #[allow(non_snake_case)]
 fn test_short_F_for_frames() {
-    let cli = unwrap_run(parse_args(vec!["cs", "-F", "10"]));
+    let cli = parse_args(vec!["cs", "-F", "10"]);
     assert_eq!(cli.frames, 10);
 }
 
 #[test]
 fn test_exclude_repeatable() {
-    let cli = unwrap_run(parse_args(vec!["cs", "-E", "foo", "-E", "bar"]));
+    let cli = parse_args(vec!["cs", "-E", "foo", "-E", "bar"]);
     assert_eq!(cli.exclude.len(), 2);
     assert_eq!(cli.exclude[0], "foo");
     assert_eq!(cli.exclude[1], "bar");
-}
-
-#[cfg(test)]
-fn run_cs(args: &[&str]) -> std::process::Output {
-    let mut cmd = std::process::Command::new("cargo");
-    cmd.arg("run").arg("--").args(args);
-    cmd.current_dir(env!("CARGO_MANIFEST_DIR"));
-    cmd.output().expect("failed to run cargo run")
-}
-
-#[test]
-fn test_default_help_subprocess() {
-    let output = run_cs(&["--help"]);
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("进程调用栈分析工具"));
-}
-
-#[test]
-fn test_en_help_subprocess() {
-    let output = run_cs(&["--en", "--help"]);
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Call stack analysis tool"));
 }

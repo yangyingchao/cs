@@ -13,7 +13,7 @@ I wrote some functions with elisp to help me analyze core dumps & call stacks. I
 helpful, so I've decided to rewrite them in Rust, making them usable outside of Emacs.
 
 #+begin_src sh -r :results verbatim :exports both
-./target/debug/cs -h && printf "\n\n" && ./target/debug/cs -h  --en
+./target/debug/cs -h
 #+end_src
 
 #+RESULTS:
@@ -38,16 +38,8 @@ Options:
   -n, --count <COUNT>            采样次数。
                                  仅在获取运行中进程的调用栈时适用，且需指定 `interval`。 [default: 1]
   -F, --frames <FRAMES>          获取调用栈的帧数，0 表示不限制 [default: 2048]
-  -W, --Wide                     宽模式：显示进程时显示所有字符
-  -M, --multi                    多选模式：选择进程时支持多选
-  -U, --unique                   去重模式：显示调用栈时合并相同栈
-  -G, --gdb                      使用 gdb 获取调用栈（默认使用 eu-stack）
-  -R, --raw                      原始模式：不对调用栈做简化（仅与 -G 配合使用）
-  -N, --no-pager                 禁用分页器
-  -P, --pattern <PATTERN>        显示名称匹配 PATTERN 的进程的调用栈
-      --en                       显示英文帮助（需与 --help 或 -h 配合使用）
   -j, --json                     以 JSON 格式输出堆栈信息
-      --match <MATCH_MODE>       堆栈去重时的匹配模式：precise（按完整帧信息去重）或 fuzzy（仅按函数名去重）。
+  -m, --match <MATCH_MODE>       堆栈去重时的匹配模式：precise（按完整帧信息去重）或 fuzzy（仅按函数名去重）。
                                  默认 auto：单进程用 precise，多进程/文件/diff 用 fuzzy。 [possible values: precise, fuzzy]
   -E, --exclude <EXCLUDE>        排除匹配指定正则的堆栈（可重复使用，匹配帧的 function 字段）
   -f, --format <FORMAT>          输出格式：text 或 json（优先于 --json） [possible values: text, json]
@@ -55,12 +47,20 @@ Options:
       --diff <BEFORE> <AFTER>    对比两个 JSON 格式的堆栈快照文件
       --diff-live                仅采样两次（before + after）并输出 diff。
                                  配合 -t 可指定间隔秒数，不带 -t 则等待按回车触发第二次。
+  -W, --Wide                     宽模式：显示进程时显示所有字符
+  -M, --multi                    多选模式：选择进程时支持多选
+  -U, --unique                   去重模式：显示调用栈时合并相同栈
+  -G, --gdb                      使用 gdb 获取调用栈（默认使用 eu-stack）
+  -R, --raw                      原始模式：不对调用栈做简化（仅与 -G 配合使用）
+  -N, --no-pager                 禁用分页器
+  -P, --pattern <PATTERN>        显示名称匹配 PATTERN 的进程的调用栈
   -h, --help                     Print help (see more with '--help')
   -V, --version                  Print version
 
 基本示例:
   - `cs --help`:                        显示本帮助信息
   - `cs`:                               交互式选择进程并显示调用栈
+  - `cs -M`:                            交互式选择多个进程并显示调用栈
   - `cs -p 905`:                        显示进程 905 的调用栈
   - `cs -p 905 -U`:                     显示进程 905 的去重调用栈
   - `cs -U -P google.chrome`:           显示所有 Chrome 进程的去重调用栈
@@ -71,63 +71,4 @@ Options:
   - `cs --diff before.json after.json`:	对比两个 JSON 快照文件
   - `cs --diff-live -p 905 -t 2`:       直接采样两次（间隔 2 秒）并输出 diff
   - `cs --diff-live -p 905`:            按回车触发第二次采样，输出 diff
-
-
-Call stack analysis tool for processes
-
-Usage: cs [OPTIONS] [FILES]...
-
-Arguments:
-  [FILES]...      files to read stack from ("-" for stdin); multiple files will be merged
-
-Options:
-  -p, --pid <PIDS>               Show stack of process PID
-      --parent <PARENT>          Show stack of all child processes of PARENT
-  -c, --core <COREFILE>          Show stack found in COREFILE
-  -e, --executable <EXECUTABLE>  EXECUTABLE that produced COREFILE (optional)
-  -u, --users <USERS>            Filter processes by user list (comma-separated)
-  -i, --initial <INITIAL>        Initial value to filter process
-  -l, --list                     List processes
-  -t, --interval <INTERVAL>      Sampling interval in seconds (min: 0.1).
-                                 Applies only when sampling a running process.
-  -n, --count <COUNT>            Number of samples to take.
-                                 Applies only when sampling a running process with `-t`.
-                                 [default: 1]
-  -F, --frames <FRAMES>          Frame count to show (0 = unlimited) [default: 2048]
-  -W, --Wide                     Wide mode: show full line in process list
-  -M, --multi                    Multi mode: allow selecting multiple processes
-  -U, --unique                   Unique mode: deduplicate identical stacks
-  -G, --gdb                      Use gdb instead of eu-stack
-  -R, --raw                      Raw mode: skip stack simplification (works with `-G` only)
-  -N, --no-pager                 Disable pager
-  -P, --pattern <PATTERN>        Filter processes by name PATTERN
-  -E, --exclude <PATTERN>        Exclude stacks matching PATTERN (regex on function field)
-      --en                       Show English help (requires --help or -h)
-      --diff <BEFORE> <AFTER>    Diff two JSON stack snapshot files
-      --diff-live                Live diff: sample twice, show diff
-  -j, --json                     JSON output format
-  -f, --format <FMT>             Output format: text or json (overrides --json)
-  -v, --verbose                  Show full output (no truncation)
-      --match <MODE>             Stack dedup match mode:
-                                    - precise (full frame info) or
-                                    - fuzzy (function names only).
-                                    - Auto: precise for single source, fuzzy for multi-source/diff
-  -h, --help                     Print help
-  -V, --version                  Print version
-
-Basic Usage:
-  - `cs --help`:                        Show Chinese help (default)
-  - `cs`:                               Choose process and show its call stack.
-  - `cs -p 905`:                        Show stack of process 905.
-  - `cs -p 905 -U`:                     Show unique stack for process 905.
-  - `cs -l -u user`:                    Show processes of USER.
-  - `cs -U -P google.chrome`:           Unique stacks of all Chrome processes.
-
-Advanced Usage:
-  - `cs -U -p 905 -t 0.5 -n 3`:         Sample 905 3 times (0.5s apart), uniquify.
-  - `cs -p 905 --json > snap.json`:     Save stack snapshot as JSON.
-  - `cs --diff before.json after.json`:	Diff two JSON snapshot files.
-  - `cs --diff-live -p 905 -t 2`:       Sample twice (2s interval), show diff.
-  - `cs --diff-live -p 905`:            Press ENTER for second sample, show diff.
-
 #+end_example
